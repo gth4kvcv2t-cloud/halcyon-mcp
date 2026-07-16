@@ -1,0 +1,11 @@
+{
+  "name": "halcyon-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "db:init": "wrangler d1 execute halcyon --remote --file=../schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240601.0"
+  }
+}
