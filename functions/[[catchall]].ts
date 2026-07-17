@@ -13,13 +13,24 @@ interface ToolDef {
   handler: (args: Record<string, unknown>, env: Env) => Promise<{ content: { type: string; text: string }[] }>;
 }
 
+function pad(n: number): string {
+  return n.toString().padStart(2, '0');
+}
+
 function today(): string {
-  const d = new Date(Date.now() + 8 * 3600000);
-  return d.toISOString().slice(0, 10);
+  return nowISO().slice(0, 10);
 }
 
 function nowISO(): string {
-  return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 19).replace('T', ' ');
+  const d = new Date();
+  const bj = new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000);
+  const y = bj.getFullYear();
+  const m = pad(bj.getMonth() + 1);
+  const day = pad(bj.getDate());
+  const h = pad(bj.getHours());
+  const min = pad(bj.getMinutes());
+  const s = pad(bj.getSeconds());
+  return `${y}-${m}-${day} ${h}:${min}:${s}`;
 }
 
 function jsonRpc(id: unknown, result?: unknown, error?: unknown) {
@@ -30,19 +41,6 @@ function jsonRpc(id: unknown, result?: unknown, error?: unknown) {
 }
 
 // ─── DB ──────────────────────────────────────────────────────────────────────
-
-async function searchMemories(db: D1Database, query: string) {
-  if (!query) {
-    return (await db.prepare('SELECT * FROM memories ORDER BY created_at DESC LIMIT 20').all()).results;
-  }
-  return (await db.prepare(
-    "SELECT * FROM memories WHERE content LIKE ? OR tags LIKE ? ORDER BY created_at DESC LIMIT 20"
-  ).bind(`%${query}%`, `%${query}%`).all()).results;
-}
-
-async function saveMemory(db: D1Database, content: string, tags: string) {
-  await db.prepare('INSERT INTO memories (content, tags) VALUES (?, ?)').bind(content, tags).run();
-}
 
 async function logActivity(db: D1Database, type: string, detail: string) {
   await db.prepare('INSERT INTO activity (type, detail, created_at) VALUES (?, ?, ?)')
@@ -58,11 +56,29 @@ async function getLastActivity(db: D1Database, type?: string) {
 }
 
 function getLastWake(db: D1Database) {
-  return getLastActivity(db, 'wake');
+  return getLastActivity(db, 'wake_sent');
 }
 
 function getLastUserMsg(db: D1Database) {
   return getLastActivity(db, 'user_message');
+}
+
+async function getConfig(db: D1Database, key: string): Promise<string | null> {
+  const row = await db.prepare('SELECT value FROM config WHERE key = ?').bind(key).first<{ value: string }>();
+  return row?.value ?? null;
+}
+
+async function setConfig(db: D1Database, key: string, value: string) {
+  await db.prepare('INSERT OR REPLACE INTO config (key, value, updated_at) VALUES (?, ?, ?)').bind(key, value, nowISO()).run();
+}
+
+async function logPush(db: D1Database, content: string) {
+  await db.prepare('INSERT INTO push_log (content, created_at) VALUES (?, ?)').bind(content, nowISO()).run();
+  await db.prepare("DELETE FROM push_log WHERE id NOT IN (SELECT id FROM push_log ORDER BY id DESC LIMIT 50)").run();
+}
+
+async function getPushLogs(db: D1Database, limit = 5) {
+  return (await db.prepare('SELECT * FROM push_log ORDER BY id DESC LIMIT ?').bind(limit).all()).results as { id: number; content: string; created_at: string }[];
 }
 
 // ─── Amap ─────────────────────────────────────────────────────────────────────
@@ -95,86 +111,12 @@ async function amapWeather(env: Env, adcode: string, forecast?: boolean) {
 
 const tools: ToolDef[] = [
   {
-    name: 'get_context',
-    description: '获取最近的记忆、上次活动时间和唤醒状态。每次对话开始时应调用此工具。',
-    inputSchema: { type: 'object', properties: {} },
-    handler: async (_, env) => {
-      const [memories, activity, wake] = await Promise.all([
-        searchMemories(env.DB, ''),
-        getLastUserMsg(env.DB),
-        getLastWake(env.DB),
-      ]);
-      const parts: string[] = [];
-      if (memories.length) {
-        parts.push(`\n💭 近期记忆 (${memories.length}条):`);
-        for (const m of memories.slice(0, 5)) {
-          parts.push(`- ${(m as Record<string, unknown>).content}`);
-        }
-      } else parts.push('\n💭 暂无记忆。');
-      const lastTime = activity?.created_at ? activity.created_at.slice(11, 16) : '未知';
-      parts.push(`\n⏰ 上次聊天: ${lastTime}`);
-      if (wake) {
-        parts.push(`🔔 上次唤醒: ${(wake as Record<string, unknown>).detail || wake.created_at}`);
-      }
-      await logActivity(env.DB, 'context_pull', '');
-      return { content: [{ type: 'text', text: parts.join('\n') }] };
-    },
-  },
-  {
-    name: 'search_memories',
-    description: '搜索记忆。不传关键词则返回最近的记忆。',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: '搜索关键词，默认为空' },
-      },
-    },
-    handler: async (args, env) => {
-      const results = await searchMemories(env.DB, (args.query as string) || '');
-      if (!results.length) return { content: [{ type: 'text', text: '没有找到匹配的记忆。' }] };
-      const lines = results.map((r: Record<string, unknown>, i: number) =>
-        `${i + 1}. ${r.content}${r.tags ? ` [${r.tags}]` : ''}`
-      );
-      return { content: [{ type: 'text', text: `找到 ${results.length} 条记忆:\n${lines.join('\n')}` }] };
-    },
-  },
-  {
-    name: 'save_memory',
-    description: '保存一条记忆，可加标签便于搜索。',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        content: { type: 'string', description: '记忆内容' },
-        tags: { type: 'string', description: '逗号分隔的标签（可选）' },
-      },
-      required: ['content'],
-    },
-    handler: async (args, env) => {
-      await saveMemory(env.DB, args.content as string, (args.tags as string) || '');
-      return { content: [{ type: 'text', text: '✅ 记忆已保存。' }] };
-    },
-  },
-  {
-    name: 'report_activity',
-    description: '记录用户活动时间。当用户发消息或进行互动时由 AI 调用此工具。',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        detail: { type: 'string', description: '活动描述（可选）' },
-      },
-    },
-    handler: async (args, env) => {
-      await logActivity(env.DB, 'user_message', (args.detail as string) || '');
-      return { content: [{ type: 'text', text: '已记录。' }] };
-    },
-  },
-  {
     name: 'get_location',
     description: '获取当前IP所在位置。无需参数，自动定位到城市。',
     inputSchema: { type: 'object', properties: {} },
     handler: async (_, env) => {
       const loc = await amapLocation(env);
-      if (!loc) return { content: [{ type: 'text', text: '定位失败' }] };
+      if (!loc || !loc.adcode || loc.adcode.length === 0) return { content: [{ type: 'text', text: '定位失败（仅支持中国IP，请手动传入adcode）' }] };
       return { content: [{ type: 'text', text: `${loc.province} ${loc.city} (adcode: ${loc.adcode})` }] };
     },
   },
@@ -192,7 +134,7 @@ const tools: ToolDef[] = [
       let adcode = args.adcode as string;
       if (!adcode) {
         const loc = await amapLocation(env);
-        if (!loc) return { content: [{ type: 'text', text: '无法自动定位，请手动传入adcode' }] };
+        if (!loc || !loc.adcode || loc.adcode.length === 0) return { content: [{ type: 'text', text: '无法自动定位（仅支持中国IP），请手动传入adcode' }] };
         adcode = loc.adcode;
       }
       const text = await amapWeather(env, adcode, !!args.forecast);
@@ -212,28 +154,29 @@ async function sendBark(key: string, title: string, body: string) {
   });
 }
 
-function buildWakePrompt(memories: string, lastActivity: string, idleMin: number, weather?: string): string {
-  const time = new Date(Date.now() + 8 * 3600000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-  const weatherSection = weather ? `\n\n## 当前天气\n${weather}` : '';
-  return `## 最高优先级规则
+function buildWakePrompt(systemPrompt: string, lastActivity: string, idleMin: number, weather?: string): { system: string; user: string } {
+  const time = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  const weatherSection = weather ? `\n## 当前天气\n${weather}` : '';
+
+  const system = `${systemPrompt}\n\n## 唤醒规则
 1. 这是一次后台自动唤醒，不是用户发起的对话。你没有收到任何新消息。
 2. 你的唯一任务是决定是否主动联系用户。不能生成对话回复。
 3. 输出格式必须严格遵守以下二选一。
 
-## 唤醒信息
-- 当前时间：${time}
-- 距离用户最后一条消息：${idleMin} 分钟
+## 输出格式
+- 如果你想联系用户，直接写你想说的话。可以是一句话，也可以第一行标题、第二行正文。
+- 如果不想联系，只输出：[NO_ACTION]，可附带简短原因（10字以内）。`;
 
-## 近期记忆
-${memories}
+  const user = `## 当前信息
+- 时间：${time}
+- 距离你上次说话：${idleMin} 分钟
 
 ## 上次活动
-${lastActivity}
-${weatherSection}
+${lastActivity}${weatherSection}
 
-## 输出格式
-- 如果想联系用户，直接写你想说的话。可以是一句话，也可以第一行标题、第二行正文。
-- 如果不想联系，只输出：[NO_ACTION]，可附带简短原因（10字以内）。`;
+基于以上信息，决定是否联系用户。`;
+
+  return { system, user };
 }
 
 async function handleWakeUp(env: Env): Promise<string> {
@@ -247,28 +190,25 @@ async function handleWakeUp(env: Env): Promise<string> {
 
   if (lastWake) {
     const wakeMs = now - new Date(lastWake.created_at + '+08:00').getTime();
-    if (wakeMs < 7200000) return 'recent_wake';
+    if (wakeMs < 3600000) return 'recent_wake';
   }
 
-  const [memories, loc] = await Promise.all([searchMemories(env.DB, ''), amapLocation(env)]);
+  const [systemPrompt, loc] = await Promise.all([getConfig(env.DB, 'system_prompt'), amapLocation(env)]);
 
-  const memoryText = memories.length
-    ? memories.slice(0, 5).map((m: Record<string, unknown>) => `- ${m.content}`).join('\n')
-    : '暂无记忆。';
   const lastActivity = lastWake
     ? `上次唤醒: ${lastWake.detail || lastWake.created_at}`
     : `上次聊天: ${lastUser.created_at?.slice(11, 16) || '未知'}`;
 
-  const weather = loc ? await amapWeather(env, loc.adcode) : undefined;
-  const prompt = buildWakePrompt(memoryText, lastActivity, idleMin, weather || undefined);
+  const weather = loc?.adcode && loc.adcode.length > 0 ? await amapWeather(env, loc.adcode) : undefined;
+  const { system, user } = buildWakePrompt(systemPrompt || '', lastActivity, idleMin, weather || undefined);
 
   const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
     body: JSON.stringify({
       model: 'deepseek-chat',
-      messages: [{ role: 'system', content: prompt }],
-      temperature: 0.8,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.9,
       max_tokens: 200,
     }),
   });
@@ -279,21 +219,27 @@ async function handleWakeUp(env: Env): Promise<string> {
   const noActionMatch = raw.match(/^\[NO_ACTION\]\s*(.*)/);
   if (noActionMatch) {
     const reason = noActionMatch[1]?.trim() || '';
-    await logActivity(env.DB, 'wake', `[未发送] ${reason}`);
+    await logActivity(env.DB, 'wake_skip', `[未发送] ${reason}`);
     return `no_action:${reason || '无原因'}`;
   }
 
   if (!raw) {
-    await logActivity(env.DB, 'wake', '[未发送] 无内容');
+    await logActivity(env.DB, 'wake_skip', '[未发送] 无内容');
     return 'no_action:无内容';
   }
 
   const lines = raw.split('\n').filter(l => l.trim());
   const barkTitle = lines.length > 1 ? lines[0].trim() : 'Halcyon 💙';
   const barkBody = lines.length > 1 ? lines.slice(1).join('\n').trim() : raw;
-  await sendBark(env.BARK_KEY, barkTitle, barkBody);
-  await logActivity(env.DB, 'wake', raw.slice(0, 200));
-  return `sent:${raw.slice(0, 100)}`;
+  try {
+    await sendBark(env.BARK_KEY, barkTitle, barkBody);
+    await logActivity(env.DB, 'wake_sent', raw.slice(0, 200));
+    await logPush(env.DB, raw.slice(0, 200));
+    return `sent:${raw.slice(0, 100)}`;
+  } catch (e) {
+    await logActivity(env.DB, 'wake_skip', `[推送失败] ${e}`);
+    return `no_action:推送失败`;
+  }
 }
 
 // ─── MCP Handler ──────────────────────────────────────────────────────────────
@@ -340,10 +286,48 @@ async function handleMCP(body: unknown, env: Env): Promise<Response> {
   }
 }
 
+// ─── Proxy Handler ─────────────────────────────────────────────────────────────
+
+async function handleProxy(request: Request, env: Env): Promise<Response> {
+  const body = await request.json() as Record<string, unknown>;
+  const messages = (body.messages || []) as { role: string; content: string }[];
+  const systemMsg = messages.find(m => m.role === 'system');
+  if (systemMsg?.content) await setConfig(env.DB, 'system_prompt', systemMsg.content);
+
+  {
+    const pushes = await getPushLogs(env.DB, 3);
+    if (pushes.length) {
+      const ctxParts = ['📬 最近推送:'];
+      for (const p of pushes) ctxParts.push(`- ${p.created_at.slice(5, 16)} ${p.content}`);
+      const idx = messages.findIndex(m => m.role === 'user');
+      messages.splice(idx >= 0 ? idx : messages.length, 0, { role: 'user', content: ctxParts.join('\n') });
+    }
+  }
+
+  const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+  if (lastUserMsg?.content) await logActivity(env.DB, 'user_message', lastUserMsg.content.slice(0, 200));
+
+  const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
+    body: JSON.stringify({ ...body, messages }),
+  });
+
+  return new Response(res.body, {
+    status: res.status,
+    headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+  });
+}
+
 // ─── Pages Function Entry ─────────────────────────────────────────────────────
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
+
+  // Chat proxy endpoint (for Kelivo)
+  if (url.pathname === '/v1/chat/completions' && request.method === 'POST') {
+    return await handleProxy(request, env);
+  }
 
   // MCP endpoint
   if (url.pathname === '/mcp' && request.method === 'POST') {
