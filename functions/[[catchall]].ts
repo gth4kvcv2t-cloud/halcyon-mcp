@@ -77,8 +77,8 @@ async function logPush(db: D1Database, content: string) {
   await db.prepare("DELETE FROM push_log WHERE id NOT IN (SELECT id FROM push_log ORDER BY id DESC LIMIT 50)").run();
 }
 
-async function getPushLogs(db: D1Database, limit = 5) {
-  return (await db.prepare('SELECT * FROM push_log ORDER BY id DESC LIMIT ?').bind(limit).all()).results as { id: number; content: string; created_at: string }[];
+async function getPushLogs(db: D1Database, afterId: number, limit = 3) {
+  return (await db.prepare('SELECT * FROM push_log WHERE id > ? ORDER BY id ASC LIMIT ?').bind(afterId, limit).all()).results as { id: number; content: string; created_at: string }[];
 }
 
 // ─── Amap ─────────────────────────────────────────────────────────────────────
@@ -295,12 +295,14 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
   if (systemMsg?.content) await setConfig(env.DB, 'system_prompt', systemMsg.content);
 
   {
-    const pushes = await getPushLogs(env.DB, 3);
+    const lastPushId = parseInt(await getConfig(env.DB, 'last_push_id') || '0', 10);
+    const pushes = await getPushLogs(env.DB, lastPushId, 3);
     if (pushes.length) {
       const ctxParts = ['📬 最近推送:'];
       for (const p of pushes) ctxParts.push(`- ${p.created_at.slice(5, 16)} ${p.content}`);
       const idx = messages.findIndex(m => m.role === 'user');
       messages.splice(idx >= 0 ? idx : messages.length, 0, { role: 'user', content: ctxParts.join('\n') });
+      await setConfig(env.DB, 'last_push_id', String(pushes[pushes.length - 1].id));
     }
   }
 
