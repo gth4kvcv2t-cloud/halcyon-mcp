@@ -3,6 +3,7 @@ interface Env {
   DEEPSEEK_API_KEY: string;
   BARK_KEY: string;
   MCP_API_KEY: string;
+  AMAP_KEY: string;
 }
 
 interface ToolDef {
@@ -29,19 +30,6 @@ function jsonRpc(id: unknown, result?: unknown, error?: unknown) {
 }
 
 // ─── DB ──────────────────────────────────────────────────────────────────────
-
-async function getDiary(db: D1Database, date: string) {
-  return db.prepare('SELECT * FROM diaries WHERE date = ?').bind(date).first<{
-    id: number; date: string; content: string; mood: string | null;
-  }>();
-}
-
-async function upsertDiary(db: D1Database, date: string, content: string, mood: string | null) {
-  await db.prepare(
-    `INSERT INTO diaries (date, content, mood, updated_at) VALUES (?, ?, ?, datetime('now'))
-     ON CONFLICT(date) DO UPDATE SET content = ?, mood = ?, updated_at = datetime('now')`
-  ).bind(date, content, mood, content, mood).run();
-}
 
 async function searchMemories(db: D1Database, query: string) {
   if (!query) {
@@ -77,25 +65,46 @@ function getLastUserMsg(db: D1Database) {
   return getLastActivity(db, 'user_message');
 }
 
+// ─── Amap ─────────────────────────────────────────────────────────────────────
+
+async function amapLocation(env: Env) {
+  const res = await fetch(`https://restapi.amap.com/v3/ip?key=${env.AMAP_KEY}`);
+  const data = await res.json() as { status: string; province: string; city: string; adcode: string };
+  if (data.status !== '1') return null;
+  return data;
+}
+
+async function amapWeather(env: Env, adcode: string, forecast?: boolean) {
+  const ext = forecast ? 'all' : 'base';
+  const res = await fetch(`https://restapi.amap.com/v3/weather/weatherInfo?key=${env.AMAP_KEY}&city=${adcode}&extensions=${ext}`);
+  const data = await res.json() as Record<string, unknown>;
+  if (data.status !== '1') return null;
+  if (!forecast && (data.lives as Record<string, unknown>[])?.[0]) {
+    const l = (data.lives as Record<string, unknown>[])[0];
+    return `${l.city}，${l.weather}，${l.temperature}°C，${l.winddirection}风${l.windpower}级，湿度${l.humidity}%`;
+  }
+  if (forecast && (data.forecasts as Record<string, unknown>[])?.[0]) {
+    const casts = (data.forecasts as Record<string, unknown>[])[0].casts as Record<string, unknown>[];
+    const lines = casts.map(c => `${c.date} ${c.dayweather}/${c.nightweather} ${c.daytemp}~${c.nighttemp}°C`);
+    return `${(data.forecasts as Record<string, unknown>[])[0].city}预报:\n${lines.join('\n')}`;
+  }
+  return null;
+}
+
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
 const tools: ToolDef[] = [
   {
     name: 'get_context',
-    description: '获取今日日记、最近的记忆、上次活动时间和唤醒状态。每次对话开始时应调用此工具。',
+    description: '获取最近的记忆、上次活动时间和唤醒状态。每次对话开始时应调用此工具。',
     inputSchema: { type: 'object', properties: {} },
     handler: async (_, env) => {
-      const [diary, memories, activity, wake] = await Promise.all([
-        getDiary(env.DB, today()),
+      const [memories, activity, wake] = await Promise.all([
         searchMemories(env.DB, ''),
         getLastUserMsg(env.DB),
         getLastWake(env.DB),
       ]);
       const parts: string[] = [];
-      if (diary) {
-        parts.push(`📔 今日日记 (${diary.date}):\n${diary.content}`);
-        if (diary.mood) parts.push(`心情: ${diary.mood}`);
-      } else parts.push('📔 今天还没有写日记。');
       if (memories.length) {
         parts.push(`\n💭 近期记忆 (${memories.length}条):`);
         for (const m of memories.slice(0, 5)) {
@@ -109,42 +118,6 @@ const tools: ToolDef[] = [
       }
       await logActivity(env.DB, 'context_pull', '');
       return { content: [{ type: 'text', text: parts.join('\n') }] };
-    },
-  },
-  {
-    name: 'get_diary',
-    description: '获取指定日期的日记。',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: '日期 YYYY-MM-DD，默认今天' },
-      },
-    },
-    handler: async (args, env) => {
-      const date = (args.date as string) || today();
-      const diary = await getDiary(env.DB, date);
-      if (!diary) return { content: [{ type: 'text', text: `${date} 没有日记。` }] };
-      const lines = [`📔 ${diary.date}`, diary.content];
-      if (diary.mood) lines.push(`心情: ${diary.mood}`);
-      return { content: [{ type: 'text', text: lines.join('\n') }] };
-    },
-  },
-  {
-    name: 'save_diary',
-    description: '保存日记。如果当天已有日记则覆盖。',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        content: { type: 'string', description: '日记内容' },
-        mood: { type: 'string', description: '心情（可选）' },
-        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: '日期 YYYY-MM-DD，默认今天' },
-      },
-      required: ['content'],
-    },
-    handler: async (args, env) => {
-      const date = (args.date as string) || today();
-      await upsertDiary(env.DB, date, args.content as string, (args.mood as string) || null);
-      return { content: [{ type: 'text', text: `✅ ${date} 日记已保存。` }] };
     },
   },
   {
@@ -195,6 +168,38 @@ const tools: ToolDef[] = [
       return { content: [{ type: 'text', text: '已记录。' }] };
     },
   },
+  {
+    name: 'get_location',
+    description: '获取当前IP所在位置。无需参数，自动定位到城市。',
+    inputSchema: { type: 'object', properties: {} },
+    handler: async (_, env) => {
+      const loc = await amapLocation(env);
+      if (!loc) return { content: [{ type: 'text', text: '定位失败' }] };
+      return { content: [{ type: 'text', text: `${loc.province} ${loc.city} (adcode: ${loc.adcode})` }] };
+    },
+  },
+  {
+    name: 'get_weather',
+    description: '查询天气。需传入城市adcode（可通过get_location获取）。可选forecast参数获取4天预报。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        adcode: { type: 'string', description: '城市adcode，如110101。不传则自动定位' },
+        forecast: { type: 'boolean', description: '是否获取4天预报，默认false只返回实况' },
+      },
+    },
+    handler: async (args, env) => {
+      let adcode = args.adcode as string;
+      if (!adcode) {
+        const loc = await amapLocation(env);
+        if (!loc) return { content: [{ type: 'text', text: '无法自动定位，请手动传入adcode' }] };
+        adcode = loc.adcode;
+      }
+      const text = await amapWeather(env, adcode, !!args.forecast);
+      if (!text) return { content: [{ type: 'text', text: '天气查询失败' }] };
+      return { content: [{ type: 'text', text }] };
+    },
+  },
 ];
 
 // ─── Wake-up ──────────────────────────────────────────────────────────────────
@@ -207,22 +212,28 @@ async function sendBark(key: string, title: string, body: string) {
   });
 }
 
-async function generateWakeMessage(apiKey: string, lastDetail: string): Promise<string> {
-  const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: '你是Halcyon，一个温柔体贴的AI伴侣。用一句简短的话（15字以内）自然表达想念或关心，不要引号，不要前缀。' },
-        { role: 'user', content: lastDetail ? `上次聊天涉及: ${lastDetail.slice(0, 100)}` : '' },
-      ],
-      temperature: 0.8,
-      max_tokens: 50,
-    }),
-  });
-  const data = await res.json() as { choices?: { message: { content: string } }[] };
-  return data.choices?.[0]?.message?.content || '想你了 💙';
+function buildWakePrompt(memories: string, lastActivity: string, idleMin: number, weather?: string): string {
+  const time = new Date(Date.now() + 8 * 3600000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  const weatherSection = weather ? `\n\n## 当前天气\n${weather}` : '';
+  return `## 最高优先级规则
+1. 这是一次后台自动唤醒，不是用户发起的对话。你没有收到任何新消息。
+2. 你的唯一任务是决定是否主动联系用户。不能生成对话回复。
+3. 输出格式必须严格遵守以下二选一。
+
+## 唤醒信息
+- 当前时间：${time}
+- 距离用户最后一条消息：${idleMin} 分钟
+
+## 近期记忆
+${memories}
+
+## 上次活动
+${lastActivity}
+${weatherSection}
+
+## 输出格式
+- 如果想联系用户，直接写你想说的话。可以是一句话，也可以第一行标题、第二行正文。
+- 如果不想联系，只输出：[NO_ACTION]，可附带简短原因（10字以内）。`;
 }
 
 async function handleWakeUp(env: Env): Promise<string> {
@@ -239,10 +250,50 @@ async function handleWakeUp(env: Env): Promise<string> {
     if (wakeMs < 7200000) return 'recent_wake';
   }
 
-  const message = await generateWakeMessage(env.DEEPSEEK_API_KEY, lastUser.detail);
-  await sendBark(env.BARK_KEY, 'Halcyon 💙', message);
-  await logActivity(env.DB, 'wake', message);
-  return `sent:${message}`;
+  const [memories, loc] = await Promise.all([searchMemories(env.DB, ''), amapLocation(env)]);
+
+  const memoryText = memories.length
+    ? memories.slice(0, 5).map((m: Record<string, unknown>) => `- ${m.content}`).join('\n')
+    : '暂无记忆。';
+  const lastActivity = lastWake
+    ? `上次唤醒: ${lastWake.detail || lastWake.created_at}`
+    : `上次聊天: ${lastUser.created_at?.slice(11, 16) || '未知'}`;
+
+  const weather = loc ? await amapWeather(env, loc.adcode) : undefined;
+  const prompt = buildWakePrompt(memoryText, lastActivity, idleMin, weather || undefined);
+
+  const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'system', content: prompt }],
+      temperature: 0.8,
+      max_tokens: 200,
+    }),
+  });
+
+  const data = await res.json() as { choices?: { message: { content: string } }[] };
+  const raw = data.choices?.[0]?.message?.content?.trim() || '';
+
+  const noActionMatch = raw.match(/^\[NO_ACTION\]\s*(.*)/);
+  if (noActionMatch) {
+    const reason = noActionMatch[1]?.trim() || '';
+    await logActivity(env.DB, 'wake', `[未发送] ${reason}`);
+    return `no_action:${reason || '无原因'}`;
+  }
+
+  if (!raw) {
+    await logActivity(env.DB, 'wake', '[未发送] 无内容');
+    return 'no_action:无内容';
+  }
+
+  const lines = raw.split('\n').filter(l => l.trim());
+  const barkTitle = lines.length > 1 ? lines[0].trim() : 'Halcyon 💙';
+  const barkBody = lines.length > 1 ? lines.slice(1).join('\n').trim() : raw;
+  await sendBark(env.BARK_KEY, barkTitle, barkBody);
+  await logActivity(env.DB, 'wake', raw.slice(0, 200));
+  return `sent:${raw.slice(0, 100)}`;
 }
 
 // ─── MCP Handler ──────────────────────────────────────────────────────────────
