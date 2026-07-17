@@ -290,9 +290,10 @@ async function sendBark(key: string, title: string, body: string) {
   });
 }
 
-function buildWakePrompt(systemPrompt: string, lastActivity: string, idleMin: number, weather?: string): { system: string; user: string } {
+function buildWakePrompt(systemPrompt: string, lastActivity: string, idleMin: number, weather?: string, isDay?: boolean): { system: string; user: string } {
   const time = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
   const weatherSection = weather ? `\n## 当前天气\n${weather}` : '';
+  const period = isDay !== undefined ? (isDay ? '☀️ 白天' : '🌙 夜间') : '';
 
   const system = `${systemPrompt}\n\n## 唤醒规则
 1. 这是一次后台自动唤醒，不是用户发起的对话。你没有收到任何新消息。
@@ -304,7 +305,7 @@ function buildWakePrompt(systemPrompt: string, lastActivity: string, idleMin: nu
 - 如果不想联系，只输出：[NO_ACTION]，可附带简短原因（10字以内）。`;
 
   const user = `## 当前信息
-- 时间：${time}
+- 时间：${time}${period ? `\n- ${period}` : ''}
 - 距离你上次说话：${idleMin} 分钟
 
 ## 上次活动
@@ -315,18 +316,28 @@ ${lastActivity}${weatherSection}
   return { system, user };
 }
 
+function isDaytime(): boolean {
+  const d = new Date();
+  const bjHour = (d.getUTCHours() + 8) % 24;
+  return bjHour >= 8 && bjHour < 23;
+}
+
 async function handleWakeUp(env: Env): Promise<string> {
   const [lastUser, lastWake] = await Promise.all([getLastUserMsg(env.DB), getLastWake(env.DB)]);
   if (!lastUser) return 'no_activity';
 
+  const day = isDaytime();
+  const idleThreshold = day ? 60 : 180;
+  const wakeCooldown = day ? 3600000 : 14400000; // 1h day, 4h night
+
   const now = Date.now();
   const idleMs = now - new Date(lastUser.created_at + '+08:00').getTime();
   const idleMin = Math.floor(idleMs / 60000);
-  if (idleMin < 60) return `active_${idleMin}min`;
+  if (idleMin < idleThreshold) return `active_${idleMin}min`;
 
   if (lastWake) {
     const wakeMs = now - new Date(lastWake.created_at + '+08:00').getTime();
-    if (wakeMs < 3600000) return 'recent_wake';
+    if (wakeMs < wakeCooldown) return 'recent_wake';
   }
 
   const [systemPrompt, loc] = await Promise.all([getConfig(env.DB, 'system_prompt'), amapLocation(env)]);
@@ -336,7 +347,7 @@ async function handleWakeUp(env: Env): Promise<string> {
     : `上次聊天: ${lastUser.created_at?.slice(11, 16) || '未知'}`;
 
   const weather = loc?.adcode && loc.adcode.length > 0 ? await amapWeather(env, loc.adcode) : undefined;
-  const { system, user } = buildWakePrompt(systemPrompt || '', lastActivity, idleMin, weather || undefined);
+  const { system, user } = buildWakePrompt(systemPrompt || '', lastActivity, idleMin, weather || undefined, day);
 
   const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
