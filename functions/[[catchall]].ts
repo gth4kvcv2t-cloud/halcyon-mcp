@@ -261,8 +261,7 @@ const tools: ToolDef[] = [
       const query = (args.query as string || '').trim();
       if (!query) return { content: [{ type: 'text', text: '请输入搜索关键词' }] };
       try {
-        const url = new URL('/stickers/stickers.json', 'https://halcyon-mcp.pages.dev');
-        const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        const res = await fetch('https://halcyon-mcp.pages.dev/stickers/stickers.json', { signal: AbortSignal.timeout(5000) });
         if (!res.ok) return { content: [{ type: 'text', text: '表情包数据加载失败' }] };
         const manifest = await res.json() as { stickers: { file: string; name: string; keywords: string[]; url: string; ext: string }[] };
         const q = query.toLowerCase();
@@ -270,7 +269,7 @@ const tools: ToolDef[] = [
           s.name.toLowerCase().includes(q) || s.keywords.some(k => k.includes(q))
         );
         if (!matches.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
-        const lines = matches.map(s => `![${s.name}](${s.url})  — ${s.name}`);
+        const lines = matches.map(s => `![${s.name}](${s.url.startsWith('http') ? s.url : BASE + s.url})  — ${s.name}`);
         return { content: [{ type: 'text', text: `找到 ${matches.length} 个相关表情包:\n\n${lines.join('\n\n')}` }] };
       } catch {
         return { content: [{ type: 'text', text: '表情包搜索失败' }] };
