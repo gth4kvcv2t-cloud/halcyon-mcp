@@ -77,7 +77,10 @@ async function logPush(db: D1Database, content: string) {
   await db.prepare("DELETE FROM push_log WHERE id NOT IN (SELECT id FROM push_log ORDER BY id DESC LIMIT 50)").run();
 }
 
-async function getPushLogs(db: D1Database, limit = 5) {
+async function getPushLogs(db: D1Database, limit = 5, sinceId = 0) {
+  if (sinceId > 0) {
+    return (await db.prepare('SELECT * FROM push_log WHERE id > ? ORDER BY id ASC LIMIT ?').bind(sinceId, limit).all()).results as { id: number; content: string; created_at: string }[];
+  }
   return (await db.prepare('SELECT * FROM push_log ORDER BY id DESC LIMIT ?').bind(limit).all()).results as { id: number; content: string; created_at: string }[];
 }
 
@@ -140,6 +143,138 @@ const tools: ToolDef[] = [
       const text = await amapWeather(env, adcode, !!args.forecast);
       if (!text) return { content: [{ type: 'text', text: '天气查询失败' }] };
       return { content: [{ type: 'text', text }] };
+    },
+  },
+  {
+    name: 'read_xiaohongshu',
+    description: '读取小红书笔记内容（标题、正文、作者、互动数据）。支持xhslink短链。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: '小红书笔记链接（xhslink短链 或 xiaohongshu.com完整链接均可）' },
+      },
+      required: ['url'],
+    },
+    handler: async (args) => {
+      const url = args.url as string;
+      if (!url) return { content: [{ type: 'text', text: '请提供URL' }] };
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!res.ok) return { content: [{ type: 'text', text: `页面不可达 (${res.status})` }] };
+        const html = await res.text();
+        if (!html.includes('__INITIAL_STATE__')) {
+          const title = html.match(/<title>([^<]*)<\/title>/i)?.[1] || '';
+          return { content: [{ type: 'text', text: `需要有效链接（含 xsec_token）。页面返回: ${title}` }] };
+        }
+        const match = html.match(/__INITIAL_STATE__\s*=\s*([\s\S]*?)<\/script>/);
+        if (!match) return { content: [{ type: 'text', text: '解析页面数据失败，页面结构可能已变更' }] };
+        const state = JSON.parse(match[1].replace(/:undefined\b/g, ':null').replace(/,undefined\b/g, ',null'));
+        const noteMap = state?.note?.noteDetailMap;
+        if (!noteMap) return { content: [{ type: 'text', text: '未找到笔记内容，可能需登录或链接不含 xsec_token' }] };
+        const key = Object.keys(noteMap)[0];
+        if (!key) return { content: [{ type: 'text', text: '未找到笔记内容，可能需登录或链接不含 xsec_token' }] };
+
+        const parse = (s: any) => typeof s === 'string' ? JSON.parse(s) : s || {};
+
+        // support both /explore/ (note_card) and /discovery/item/ (note) formats
+        const src = noteMap[key]?.note_card || noteMap[key]?.note || {};
+        const nc = src.note_card || src;
+        const title = nc.title || src.title || '无标题';
+        const desc = nc.desc || src.desc || '';
+        const user = nc.user || parse(src.user) || {};
+        const interact = nc.interact_info || parse(src.interactInfo) || {};
+        const time = nc.time || src.time;
+        const imageList = nc.image_list || parse(src.imageList) || [];
+        const tagList = nc.tag_list || parse(src.tagList) || [];
+
+        let r = `标题: ${title}\n作者: ${user.nickname || '未知'}\n`;
+        if (desc) r += `\n正文:\n${desc}\n`;
+        r += `\n👍 ${interact.liked_count || interact.likedCount || 0}  💬 ${interact.comment_count || interact.commentCount || 0}  ⭐ ${interact.collected_count || interact.collectedCount || 0}  🔗 ${interact.share_count || interact.shareCount || 0}\n`;
+        if (time) r += `发布时间: ${new Date(time).toLocaleString('zh-CN')}\n`;
+        if (imageList.length) r += `图片: ${imageList.length}张\n`;
+        if (tagList.length) r += `标签: ${tagList.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean).join(', ')}\n`;
+        return { content: [{ type: 'text', text: r }] };
+      } catch (e) {
+        return { content: [{ type: 'text', text: `读取失败: ${e instanceof Error ? e.message : e}` }] };
+      }
+    },
+  },
+  {
+    name: 'read_url',
+    description: '读取网页内容并转为markdown格式，适合LLM阅读分析。发链接给AI时AI会自动调用。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: '网页完整URL，含https://' },
+      },
+      required: ['url'],
+    },
+    handler: async (args) => {
+      const url = args.url as string;
+      if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+        return { content: [{ type: 'text', text: '请提供有效的URL' }] };
+      }
+
+      const tryFetch = async (signal: AbortSignal) => {
+        const jina = await fetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
+          headers: { 'X-Return-Format': 'markdown' },
+          signal,
+        });
+        if (jina.ok) return { ok: true as const, text: (await jina.text()).slice(0, 8000) };
+        const raw = await fetch(url, { signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        if (!raw.ok) return { ok: false as const, msg: `读取失败 (${raw.status})` };
+        const html = await raw.text();
+        const cleaned = html
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&[a-z]+;/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const title = html.match(/<title>([^<]*)<\/title>/i)?.[1] || '';
+        return { ok: true as const, text: `# ${title}\n\n${cleaned}`.slice(0, 8000) };
+      };
+
+      try {
+        const result = await tryFetch(AbortSignal.timeout(15000));
+        if (!result.ok) return { content: [{ type: 'text', text: result.msg }] };
+        return { content: [{ type: 'text', text: result.text }] };
+      } catch {
+        return { content: [{ type: 'text', text: '读取超时或网络错误' }] };
+      }
+    },
+  },
+  {
+    name: 'search_stickers',
+    description: '搜索表情包。根据关键词匹配已上传的表情包（GIF/图片），返回表情包名称、URL和格式',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '搜索关键词，如"开心""无语""震惊""猫"等' },
+      },
+      required: ['query'],
+    },
+    handler: async (args) => {
+      const query = (args.query as string || '').trim();
+      if (!query) return { content: [{ type: 'text', text: '请输入搜索关键词' }] };
+      try {
+        const url = new URL('/stickers/stickers.json', 'https://halcyon-mcp.pages.dev');
+        const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) return { content: [{ type: 'text', text: '表情包数据加载失败' }] };
+        const manifest = await res.json() as { stickers: { file: string; name: string; keywords: string[]; url: string; ext: string }[] };
+        const q = query.toLowerCase();
+        const matches = manifest.stickers.filter(s =>
+          s.name.toLowerCase().includes(q) || s.keywords.some(k => k.includes(q))
+        );
+        if (!matches.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
+        const lines = matches.map(s => `![${s.name}](${s.url})  — ${s.name}`);
+        return { content: [{ type: 'text', text: `找到 ${matches.length} 个相关表情包:\n\n${lines.join('\n\n')}` }] };
+      } catch {
+        return { content: [{ type: 'text', text: '表情包搜索失败' }] };
+      }
     },
   },
 ];
@@ -295,12 +430,14 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
   if (systemMsg?.content) await setConfig(env.DB, 'system_prompt', systemMsg.content);
 
   {
-    const pushes = await getPushLogs(env.DB, 3);
+    const lastId = parseInt(await getConfig(env.DB, 'last_injected_push_log_id') || '0', 10);
+    const pushes = await getPushLogs(env.DB, 3, lastId);
     if (pushes.length) {
       const ctxParts = ['📬 最近推送:'];
       for (const p of pushes) ctxParts.push(`- ${p.created_at.slice(5, 16)} ${p.content}`);
       const idx = messages.findIndex(m => m.role === 'user');
       messages.splice(idx >= 0 ? idx : messages.length, 0, { role: 'user', content: ctxParts.join('\n') });
+      await setConfig(env.DB, 'last_injected_push_log_id', String(pushes[pushes.length - 1].id));
     }
   }
 
@@ -319,10 +456,42 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
   });
 }
 
+// ─── Balance endpoint ──────────────────────────────────────────────────────────
+
+async function handleBalance(request: Request, env: Env): Promise<Response> {
+  const res = await fetch('https://api.deepseek.com/v1/user/balance', {
+    headers: { Authorization: request.headers.get('Authorization') || `Bearer ${env.DEEPSEEK_API_KEY}` },
+  });
+  return new Response(res.body, {
+    status: res.status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+async function handleModels(env: Env): Promise<Response> {
+  const res = await fetch('https://api.deepseek.com/v1/models', {
+    headers: { Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
+  });
+  return new Response(res.body, {
+    status: res.status,
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+  });
+}
+
 // ─── Pages Function Entry ─────────────────────────────────────────────────────
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
+
+  // Balance endpoint (Kelivo reads total_balance here)
+  if (url.pathname === '/v1/user/balance') {
+    return await handleBalance(request, env);
+  }
+
+  // Models list (Kelivo may request this)
+  if (url.pathname === '/v1/models') {
+    return await handleModels(env);
+  }
 
   // Chat proxy endpoint (for Kelivo)
   if (url.pathname === '/v1/chat/completions' && request.method === 'POST') {
