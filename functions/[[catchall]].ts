@@ -249,11 +249,11 @@ const tools: ToolDef[] = [
   },
   {
     name: 'search_stickers',
-    description: '搜索表情包。根据关键词匹配已上传的表情包（GIF/图片），返回表情包名称、URL和格式',
+    description: '搜索表情包。根据表情（开心/无语/震惊/生气/悲伤/怀疑/得意/卖萌/赞等）或关键词搜索匹配的表情包（GIF/图片），返回对应的图片URL。AI应该根据聊天语境主动选择合适的表情包回复',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: '搜索关键词，如"开心""无语""震惊""猫"等' },
+        query: { type: 'string', description: '搜索关键词，可以是：情感（开心/无语/震惊/生气/悲伤/怀疑/得意/赞/卖萌/疑惑/嘲讽/思考/发呆/痴呆/焦虑/崩溃/严肃/无奈/装逼/色/自嘲/可怜/委屈/睿智/恐慌/惊讶/尴尬/不屑）、动作（笑/哭/看/指/吐舌/戴墨镜/尖叫/爆炸）、角色（奶龙/猫meme/熊猫头/吉娃娃/陈赫/青蛙）' },
       },
       required: ['query'],
     },
@@ -263,13 +263,15 @@ const tools: ToolDef[] = [
       try {
         const res = await fetch('https://halcyon-mcp.pages.dev/stickers/stickers.json', { signal: AbortSignal.timeout(5000) });
         if (!res.ok) return { content: [{ type: 'text', text: '表情包数据加载失败' }] };
-        const manifest = await res.json() as { stickers: { file: string; name: string; keywords: string[]; url: string; ext: string }[] };
+        const manifest = await res.json() as { stickers: { file: string; name: string; keywords: string[]; tags: string[]; url: string; ext: string }[] };
         const q = query.toLowerCase();
-        const matches = manifest.stickers.filter(s =>
-          s.name.toLowerCase().includes(q) || s.keywords.some(k => k.includes(q))
-        );
+        const matches = manifest.stickers.filter(s => {
+          if (s.name.toLowerCase().includes(q)) return true;
+          if (s.keywords.some(k => k.includes(q))) return true;
+          return s.keywords.some(k => q.includes(k));
+        });
         if (!matches.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
-        const lines = matches.map(s => `![${s.name}](${s.url.startsWith('http') ? s.url : BASE + s.url})  — ${s.name}`);
+        const lines = matches.map(s => `![${s.name}](${s.url.startsWith('http') ? s.url : 'https://halcyon-mcp.pages.dev' + s.url})  — ${s.name}`);
         return { content: [{ type: 'text', text: `找到 ${matches.length} 个相关表情包:\n\n${lines.join('\n\n')}` }] };
       } catch {
         return { content: [{ type: 'text', text: '表情包搜索失败' }] };
