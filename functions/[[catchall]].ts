@@ -328,7 +328,7 @@ async function handleWakeUp(env: Env): Promise<string> {
 
   const day = isDaytime();
   const idleThreshold = day ? 60 : 180;
-  const wakeCooldown = day ? 3600000 : 14400000; // 1h day, 4h night
+  const wakeCooldown = day ? 7200000 : 14400000; // 2h day, 4h night
 
   const now = Date.now();
   const idleMs = now - new Date(lastUser.created_at + '+08:00').getTime();
