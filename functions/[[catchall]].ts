@@ -258,7 +258,7 @@ const tools: ToolDef[] = [
       try {
         const res = await fetch('https://halcyon-mcp.pages.dev/stickers/stickers.json', { signal: AbortSignal.timeout(5000) });
         if (!res.ok) return { content: [{ type: 'text', text: '表情包数据加载失败' }] };
-        const manifest = await res.json() as { stickers: { file: string; name: string; keywords: string[]; tags: string[]; url: string; ext: string }[] };
+        const manifest = await res.json() as { stickers: { file: string; name: string; desc?: string; keywords: string[]; tags: string[]; url: string; ext: string }[] };
         const q = query.toLowerCase();
 
         function charMatch(s: string, qry: string): boolean {
@@ -284,11 +284,11 @@ const tools: ToolDef[] = [
         const top = scored.slice(0, 3);
         const lines = top.map((s, i) => {
           const url = s.url.startsWith('http') ? s.url : 'https://halcyon-mcp.pages.dev' + s.url;
-          return `${i + 1}. ![${s.name}](${url})`;
+          return `${i + 1}. ![${s.name}](${url}) — ${s.desc || s.name}`;
         });
 
         if (top.length === 1) {
-          await setConfig(env.DB, 'pending_sticker', lines[0].slice(3));
+          await setConfig(env.DB, 'pending_sticker', `![${top[0].name}](${top[0].url}) — ${top[0].desc || top[0].name}`);
         }
 
         return { content: [{ type: 'text', text: lines.join('\n') }] };
