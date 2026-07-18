@@ -258,17 +258,38 @@ const tools: ToolDef[] = [
         if (!res.ok) return { content: [{ type: 'text', text: '表情包数据加载失败' }] };
         const manifest = await res.json() as { stickers: { file: string; name: string; keywords: string[]; tags: string[]; url: string; ext: string }[] };
         const q = query.toLowerCase();
+
+        function charMatch(s: string, qry: string): boolean {
+          if (!qry) return false;
+          const chars = [...new Set([...qry])].filter(c => c.trim());
+          if (!chars.length) return false;
+          const hits = chars.filter(c => s.includes(c)).length;
+          return hits / chars.length >= 0.5;
+        }
+
         const scored = manifest.stickers.map(s => {
           let score = 0;
-          if (s.name.toLowerCase().includes(q)) score += 2;
+          const name = s.name.toLowerCase();
+          const allText = name + ' ' + s.keywords.join(' ');
+          if (name.includes(q)) score += 2;
           if (s.keywords.some(k => k.includes(q) || q.includes(k))) score += 1;
+          if (score === 0 && charMatch(allText, q)) score += 1;
           return { ...s, score };
         }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
+
         if (!scored.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
-        const url = scored[0].url.startsWith('http') ? scored[0].url : 'https://halcyon-mcp.pages.dev' + scored[0].url;
-        const md = `![${scored[0].name}](${url})`;
-        await setConfig(env.DB, 'pending_sticker', md);
-        return { content: [{ type: 'text', text: `粘贴此图片到回复:\n${md}` }] };
+
+        const top = scored.slice(0, 3);
+        const lines = top.map((s, i) => {
+          const url = s.url.startsWith('http') ? s.url : 'https://halcyon-mcp.pages.dev' + s.url;
+          return `${i + 1}. ![${s.name}](${url})`;
+        });
+
+        if (top.length === 1) {
+          await setConfig(env.DB, 'pending_sticker', lines[0].slice(3));
+        }
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
       } catch {
         return { content: [{ type: 'text', text: '表情包搜索失败' }] };
       }
