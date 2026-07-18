@@ -17,10 +17,6 @@ function pad(n: number): string {
   return n.toString().padStart(2, '0');
 }
 
-function today(): string {
-  return nowISO().slice(0, 10);
-}
-
 function nowISO(): string {
   const d = new Date();
   const bj = new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000);
@@ -77,10 +73,7 @@ async function logPush(db: D1Database, content: string) {
   await db.prepare("DELETE FROM push_log WHERE id NOT IN (SELECT id FROM push_log ORDER BY id DESC LIMIT 50)").run();
 }
 
-async function getPushLogs(db: D1Database, limit = 5, sinceId = 0) {
-  if (sinceId > 0) {
-    return (await db.prepare('SELECT * FROM push_log WHERE id > ? ORDER BY id ASC LIMIT ?').bind(sinceId, limit).all()).results as { id: number; content: string; created_at: string }[];
-  }
+async function getPushLogs(db: D1Database, limit = 5) {
   return (await db.prepare('SELECT * FROM push_log ORDER BY id DESC LIMIT ?').bind(limit).all()).results as { id: number; content: string; created_at: string }[];
 }
 
@@ -460,7 +453,7 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
   if (systemMsg?.content) await setConfig(env.DB, 'system_prompt', systemMsg.content);
 
   {
-    const pushes = await getPushLogs(env.DB, 3, 0);
+    const pushes = await getPushLogs(env.DB, 3);
     if (pushes.length) {
       pushes.reverse();
       const ctxParts = ['📬 最近推送:'];
