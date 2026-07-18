@@ -249,7 +249,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'search_stickers',
-    description: '搜索表情包。根据表情（开心/无语/震惊/生气/悲伤/怀疑/得意/卖萌/赞等）或关键词搜索匹配的表情包（GIF/图片），返回对应的图片URL。AI应该根据聊天语境主动选择合适的表情包回复',
+    description: '搜索表情包。调用此工具后，你必须在回复中粘贴返回的Markdown图片（![名称](URL)），不允许只描述不贴图。适合在回复末尾贴一个表情包增强语气。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -265,14 +265,15 @@ const tools: ToolDef[] = [
         if (!res.ok) return { content: [{ type: 'text', text: '表情包数据加载失败' }] };
         const manifest = await res.json() as { stickers: { file: string; name: string; keywords: string[]; tags: string[]; url: string; ext: string }[] };
         const q = query.toLowerCase();
-        const matches = manifest.stickers.filter(s => {
-          if (s.name.toLowerCase().includes(q)) return true;
-          if (s.keywords.some(k => k.includes(q))) return true;
-          return s.keywords.some(k => q.includes(k));
-        });
-        if (!matches.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
-        const lines = matches.map(s => `![${s.name}](${s.url.startsWith('http') ? s.url : 'https://halcyon-mcp.pages.dev' + s.url})  — ${s.name}`);
-        return { content: [{ type: 'text', text: `找到 ${matches.length} 个相关表情包:\n\n${lines.join('\n\n')}` }] };
+        const scored = manifest.stickers.map(s => {
+          let score = 0;
+          if (s.name.toLowerCase().includes(q)) score += 2;
+          if (s.keywords.some(k => k.includes(q) || q.includes(k))) score += 1;
+          return { ...s, score };
+        }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
+        if (!scored.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
+        const url = scored[0].url.startsWith('http') ? scored[0].url : 'https://halcyon-mcp.pages.dev' + scored[0].url;
+        return { content: [{ type: 'text', text: `![${scored[0].name}](${url})` }] };
       } catch {
         return { content: [{ type: 'text', text: '表情包搜索失败' }] };
       }
