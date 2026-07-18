@@ -1,482 +1,470 @@
 {
   "stickers": [
     {
-      "file": "举中指“窝草了”.png",
-      "name": "举中指“窝草了”",
+      "file": "陈赫在线卖萌.png",
+      "name": "陈赫在线卖萌",
+      "desc": "图中人物是陈赫，出自综艺《奔跑吧兄弟》片段，经典梗名“亚比”，动作是闭眼攥小拳头撒娇卖萌、哀求。",
       "keywords": [
-        "卧槽",
-        "愤怒",
-        "骂人",
-        "生气",
-        "暴躁",
-        "举中指“窝草了”"
+        "哀求",
+        "撒娇",
+        "卑微",
+        "软磨硬泡",
+        "恳求",
+        "卖萌",
+        "讨好",
+        "苦苦祈求"
       ],
       "tags": [
-        "生气",
-        "愤怒",
-        "骂人",
-        "暴躁",
-        "卧槽"
+        "哀求",
+        "撒娇",
+        "卖萌",
+        "恳求"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E4%B8%BE%E4%B8%AD%E6%8C%87%E2%80%9C%E7%AA%9D%E8%8D%89%E4%BA%86%E2%80%9D.png",
-      "ext": "png"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E9%99%88%E8%B5%AB%E5%9C%A8%E7%BA%BF%E5%8D%96%E8%90%8C.png"
     },
     {
-      "file": "吐舌竖大拇指吉娃娃.png",
-      "name": "吐舌竖大拇指吉娃娃",
+      "file": "猥琐馋笑.png",
+      "name": "猥琐馋笑",
+      "desc": "一睁一歪的眼睛、猥琐傻笑、嘴角流口水，画风蠢萌抽象。",
       "keywords": [
-        "吐舌竖大拇指吉娃娃",
-        "厉害",
-        "肯定",
-        "赞",
-        "牛逼",
-        "棒",
-        "认可",
-        "好"
+        "馋",
+        "觊觎",
+        "心动",
+        "猥琐期待",
+        "眼馋",
+        "渴望",
+        "犯花痴",
+        "贪婪",
+        "蠢萌坏笑",
+        "犯蠢"
       ],
       "tags": [
-        "赞",
-        "棒",
-        "牛逼",
-        "厉害",
-        "好",
-        "认可",
-        "肯定"
+        "馋",
+        "猥琐",
+        "花痴",
+        "渴望"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%90%90%E8%88%8C%E7%AB%96%E5%A4%A7%E6%8B%87%E6%8C%87%E5%90%89%E5%A8%83%E5%A8%83.png",
-      "ext": "png"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%8C%A5%E7%90%90%E9%A6%8B%E7%AC%91.png"
     },
     {
-      "file": "大眼震惊吉娃娃.png",
-      "name": "大眼震惊吉娃娃",
+      "file": "卑微求善待.png",
+      "name": "卑微求善待",
+      "desc": "小熊拼接真人淡漠人脸，手举写有“求善待”的白色标牌，画风压抑又搞笑，主打卑微求饶、弱小无助的自嘲感。",
       "keywords": [
-        "震惊",
-        "吓到",
-        "不敢相信",
-        "惊讶",
-        "大眼震惊吉娃娃",
-        "吃惊"
-      ],
-      "tags": [
-        "震惊",
-        "惊讶",
-        "吓到",
-        "不敢相信",
-        "吃惊"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%A4%A7%E7%9C%BC%E9%9C%87%E6%83%8A%E5%90%89%E5%A8%83%E5%A8%83.png",
-      "ext": "png"
-    },
-    {
-      "file": "奶龙思考.jpg",
-      "name": "奶龙思考",
-      "keywords": [
-        "奶龙思考",
-        "想",
-        "思考",
-        "琢磨",
-        "考虑"
-      ],
-      "tags": [
-        "思考",
-        "想",
-        "琢磨",
-        "考虑"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%A5%B6%E9%BE%99%E6%80%9D%E8%80%83.jpg",
-      "ext": "jpg"
-    },
-    {
-      "file": "奶龙憋笑.png",
-      "name": "奶龙憋笑",
-      "keywords": [
-        "忍住",
-        "憋笑",
-        "搞笑",
-        "奶龙憋笑",
-        "偷笑"
-      ],
-      "tags": [
-        "憋笑",
-        "忍住",
-        "偷笑",
-        "搞笑"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%A5%B6%E9%BE%99%E6%86%8B%E7%AC%91.png",
-      "ext": "png"
-    },
-    {
-      "file": "奶龙捧腹大笑.jpg",
-      "name": "奶龙捧腹大笑",
-      "keywords": [
-        "大笑",
-        "笑死",
-        "爆笑",
-        "哈哈",
-        "奶龙捧腹大笑"
-      ],
-      "tags": [
-        "大笑",
-        "笑死",
-        "哈哈",
-        "爆笑"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%A5%B6%E9%BE%99%E6%8D%A7%E8%85%B9%E5%A4%A7%E7%AC%91.jpg",
-      "ext": "jpg"
-    },
-    {
-      "file": "奶龙狂笑.gif",
-      "name": "奶龙狂笑",
-      "keywords": [
-        "哈哈哈",
-        "鹅笑",
-        "狂笑",
-        "笑死",
-        "奶龙狂笑",
-        "开心"
-      ],
-      "tags": [
-        "狂笑",
-        "开心",
-        "笑死",
-        "哈哈哈",
-        "鹅笑"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%A5%B6%E9%BE%99%E7%8B%82%E7%AC%91.gif",
-      "ext": "gif"
-    },
-    {
-      "file": "无语 “求善待”.png",
-      "name": "无语 “求善待”",
-      "keywords": [
-        "“求善待”",
+        "卑微",
+        "委屈",
+        "弱小无助",
         "求饶",
-        "求放过",
-        "无奈",
-        "无语"
+        "恳求",
+        "自嘲",
+        "可怜巴巴",
+        "脆弱",
+        "求包容"
       ],
       "tags": [
-        "无语",
-        "无奈",
-        "求放过",
-        "求饶"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E6%97%A0%E8%AF%AD%20%E2%80%9C%E6%B1%82%E5%96%84%E5%BE%85%E2%80%9D.png",
-      "ext": "png"
-    },
-    {
-      "file": "无语“。。。”.jpg",
-      "name": "无语“。。。”",
-      "keywords": [
-        "无话可说",
-        "无言以对",
-        "沉默",
-        "无语“。。。”",
-        "无语"
-      ],
-      "tags": [
-        "无语",
-        "沉默",
-        "无言以对",
-        "无话可说"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E6%97%A0%E8%AF%AD%E2%80%9C%E3%80%82%E3%80%82%E3%80%82%E2%80%9D.jpg",
-      "ext": "jpg"
-    },
-    {
-      "file": "深情脸.png",
-      "name": "深情脸",
-      "keywords": [
-        "认真",
-        "深情脸",
-        "深情",
-        "专注",
-        "含情脉脉"
-      ],
-      "tags": [
-        "深情",
-        "认真",
-        "专注",
-        "含情脉脉"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E6%B7%B1%E6%83%85%E8%84%B8.png",
-      "ext": "png"
-    },
-    {
-      "file": "熊猫头 睿智 扶眼镜.png",
-      "name": "熊猫头 睿智 扶眼镜",
-      "keywords": [
-        "熊猫头",
-        "扶眼镜",
-        "看穿",
-        "机智",
-        "懂王",
-        "智慧",
-        "睿智"
-      ],
-      "tags": [
-        "睿智",
-        "智慧",
-        "懂王",
-        "机智",
-        "看穿"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%86%8A%E7%8C%AB%E5%A4%B4%20%E7%9D%BF%E6%99%BA%20%E6%89%B6%E7%9C%BC%E9%95%9C.png",
-      "ext": "png"
-    },
-    {
-      "file": "猫meme 尖叫.gif",
-      "name": "猫meme 尖叫",
-      "keywords": [
-        "尖叫",
-        "激动",
-        "吓到",
-        "抓狂",
-        "猫meme",
-        "崩溃"
-      ],
-      "tags": [
-        "尖叫",
-        "吓到",
-        "激动",
-        "抓狂",
-        "崩溃"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%8C%ABmeme%20%E5%B0%96%E5%8F%AB.gif",
-      "ext": "gif"
-    },
-    {
-      "file": "猫meme 带墨镜 帅.gif",
-      "name": "猫meme 带墨镜 帅",
-      "keywords": [
-        "得意",
-        "酷",
-        "自信",
-        "帅",
-        "猫meme",
-        "带墨镜",
-        "装逼"
-      ],
-      "tags": [
-        "得意",
-        "帅",
-        "酷",
-        "装逼",
-        "自信"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%8C%ABmeme%20%E5%B8%A6%E5%A2%A8%E9%95%9C%20%E5%B8%85.gif",
-      "ext": "gif"
-    },
-    {
-      "file": "猫meme 怒 爆炸.gif",
-      "name": "猫meme 怒 爆炸",
-      "keywords": [
-        "炸了",
-        "愤怒",
-        "猫meme",
-        "生气",
-        "暴躁",
-        "怒",
-        "爆炸"
-      ],
-      "tags": [
-        "生气",
-        "愤怒",
-        "爆炸",
-        "暴躁",
-        "炸了"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%8C%ABmeme%20%E6%80%92%20%E7%88%86%E7%82%B8.gif",
-      "ext": "gif"
-    },
-    {
-      "file": "猫meme 斜眼看 怀疑.gif",
-      "name": "猫meme 斜眼看 怀疑",
-      "keywords": [
-        "不信",
-        "斜眼看",
-        "质疑",
-        "猫meme",
-        "怀疑",
-        "打量",
-        "审视"
-      ],
-      "tags": [
-        "怀疑",
-        "质疑",
-        "不信",
-        "审视",
-        "打量"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%8C%ABmeme%20%E6%96%9C%E7%9C%BC%E7%9C%8B%20%E6%80%80%E7%96%91.gif",
-      "ext": "gif"
-    },
-    {
-      "file": "猫meme 落汤猫 悲伤.gif",
-      "name": "猫meme 落汤猫 悲伤",
-      "keywords": [
+        "卑微",
         "委屈",
-        "难过",
-        "猫meme",
-        "落汤猫",
-        "悲伤",
-        "可怜"
+        "求饶",
+        "自嘲"
       ],
-      "tags": [
-        "悲伤",
-        "难过",
-        "委屈",
-        "可怜"
-      ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%8C%ABmeme%20%E8%90%BD%E6%B1%A4%E7%8C%AB%20%E6%82%B2%E4%BC%A4.gif",
-      "ext": "gif"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%8D%91%E5%BE%AE%E6%B1%82%E5%96%84%E5%BE%85.png"
     },
     {
-      "file": "猫meme 迟疑 愣.gif",
-      "name": "猫meme 迟疑 愣",
+      "file": "吉娃娃吐舌竖大拇指.png",
+      "name": "吉娃娃吐舌竖大拇指",
+      "desc": "吉娃娃一边歪眼吐舌头一边竖大拇指，主打沙雕认可、阴阳夸赞、真心佩服两种氛围。",
       "keywords": [
-        "愣",
-        "迟疑",
-        "没反应过来",
-        "猫meme",
-        "僵住",
-        "呆",
-        "愣住"
+        "认可",
+        "佩服",
+        "赞同",
+        "阴阳夸赞",
+        "搞笑捧场",
+        "狠狠认同",
+        "绝了",
+        "给力"
       ],
       "tags": [
-        "愣住",
-        "呆",
-        "迟疑",
-        "僵住",
-        "没反应过来"
+        "认可",
+        "佩服",
+        "赞",
+        "给力"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%8C%ABmeme%20%E8%BF%9F%E7%96%91%20%E6%84%A3.gif",
-      "ext": "gif"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%90%89%E5%A8%83%E5%A8%83%E5%90%90%E8%88%8C%E7%AB%96%E5%A4%A7%E6%8B%87%E6%8C%87.png"
     },
     {
-      "file": "痴呆脸.png",
-      "name": "痴呆脸",
+      "file": "吉娃娃呆滞歪眼吐舌.png",
+      "name": "吉娃娃呆滞歪眼吐舌",
+      "desc": "吉娃娃一睁一眯斜眼、半耷拉舌头，画风呆滞放空、带点欠揍又慵懒的沙雕感。",
       "keywords": [
+        "放空",
         "呆滞",
-        "痴呆脸",
-        "痴呆",
-        "发愣",
-        "放空"
+        "脑内空白",
+        "麻木",
+        "摆烂",
+        "无语",
+        "慵懒",
+        "浑浑噩噩",
+        "没思绪"
       ],
       "tags": [
-        "痴呆",
         "呆滞",
         "放空",
-        "发愣"
+        "无语",
+        "麻木"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%97%B4%E5%91%86%E8%84%B8.png",
-      "ext": "png"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%90%89%E5%A8%83%E5%A8%83%E5%91%86%E6%BB%9E%E6%AD%AA%E7%9C%BC%E5%90%90%E8%88%8C.png"
     },
     {
-      "file": "自嘲熊 咋了妹子.jpeg",
-      "name": "自嘲熊 咋了妹子",
+      "file": "吉娃娃大眼紧张.png",
+      "name": "吉娃娃大眼紧张",
+      "desc": "吉娃娃圆溜溜超大双眼、前爪搭在人腿上，眼神充满震惊、慌张、吃瓜好奇感。",
       "keywords": [
-        "咋了妹子",
-        "自嘲熊",
-        "自嘲",
-        "咋了",
-        "无奈",
-        "苦笑"
+        "震惊",
+        "慌张",
+        "好奇",
+        "难以置信",
+        "吃瓜围观",
+        "忐忑",
+        "瞳孔地震",
+        "错愕",
+        "紧张",
+        "八卦"
       ],
       "tags": [
-        "自嘲",
-        "咋了",
-        "无奈",
-        "苦笑"
+        "震惊",
+        "慌张",
+        "紧张",
+        "惊讶"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E8%87%AA%E5%98%B2%E7%86%8A%20%E5%92%8B%E4%BA%86%E5%A6%B9%E5%AD%90.jpeg",
-      "ext": "jpeg"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%90%89%E5%A8%83%E5%A8%83%E5%A4%A7%E7%9C%BC%E7%B4%A7%E5%BC%A0.png"
     },
     {
-      "file": "色眯眯涣散吐舌狗.png",
-      "name": "色眯眯涣散吐舌狗",
+      "file": "潦草手绘花痴脸.png",
+      "name": "潦草手绘花痴脸",
+      "desc": "粗线条动漫风大头人物，背景铺满粉色爱心与闪星光斑，线条随性粗糙，眼神平静带一点点娇羞、花痴、心动氛围感。",
       "keywords": [
-        "色眯眯涣散吐舌狗",
-        "色",
-        "猥琐",
+        "心动",
+        "暗恋",
+        "害羞",
         "花痴",
-        "流口水"
+        "沦陷",
+        "深情",
+        "温柔娇羞",
+        "星星眼"
       ],
       "tags": [
-        "色",
-        "猥琐",
         "花痴",
-        "流口水"
+        "心动",
+        "害羞",
+        "深情"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E8%89%B2%E7%9C%AF%E7%9C%AF%E6%B6%A3%E6%95%A3%E5%90%90%E8%88%8C%E7%8B%97.png",
-      "ext": "png"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E6%BD%A6%E8%8D%89%E6%89%8B%E7%BB%98%E8%8A%B1%E7%97%B4%E8%84%B8.png"
     },
     {
-      "file": "装严肃.png",
-      "name": "装严肃",
+      "file": "保持严肃小人.png",
+      "name": "保持严肃小人",
+      "desc": "简笔画小人眉头紧锁、双手交叉搓手，表示憋笑、内心暗爽但故作正经，心里偷乐但表面强行严肃，假装一本正经。",
       "keywords": [
-        "假装",
-        "装严肃",
         "严肃",
-        "正经",
-        "装"
+        "紧张",
+        "忐忑",
+        "暗中观察",
+        "憋笑",
+        "一本正经",
+        "深思熟虑"
       ],
       "tags": [
         "严肃",
-        "假装",
-        "正经",
-        "装"
+        "憋笑",
+        "假装"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E8%A3%85%E4%B8%A5%E8%82%83.png",
-      "ext": "png"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E4%BF%9D%E6%8C%81%E4%B8%A5%E8%82%83%E5%B0%8F%E4%BA%BA.png"
     },
     {
-      "file": "陈赫卖萌 抽象.png",
-      "name": "陈赫卖萌 抽象",
+      "file": "举中指\"窝草了\".png",
+      "name": "举中指“窝草了”",
+      "desc": "魔改黄色小黄脸，叠加真人平淡无神人脸，搭配竖起一根中指 + 红字“窝草了”。",
       "keywords": [
-        "陈赫",
-        "卖萌",
-        "撒娇",
-        "抽象",
-        "陈赫卖萌"
+        "震惊",
+        "懵圈",
+        "无语",
+        "崩溃",
+        "离谱",
+        "麻木",
+        "心态炸裂",
+        "难以置信",
+        "吐槽",
+        "迷惑"
       ],
       "tags": [
-        "卖萌",
-        "撒娇",
-        "陈赫",
-        "抽象"
+        "震惊",
+        "无语",
+        "崩溃",
+        "离谱"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E9%99%88%E8%B5%AB%E5%8D%96%E8%90%8C%20%E6%8A%BD%E8%B1%A1.png",
-      "ext": "png"
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E4%B8%BE%E4%B8%AD%E6%8C%87%22%E7%AA%9D%E8%8D%89%E4%BA%86%22.png"
     },
     {
-      "file": "青蛙指脑子“你这里有问题”.gif",
-      "name": "青蛙指脑子“你这里有问题”",
+      "file": "软萌小熊\"咋了妹子\".jpeg",
+      "name": "软萌小熊“咋了妹子”",
+      "desc": "白熊换上蟑螂造型娃衣，搭配文字“咋了妹子”，整体语气软乎乎、带着关切。",
       "keywords": [
-        "指脑子",
-        "嘲讽",
-        "质疑",
-        "离谱",
-        "青蛙指脑子“你这里有问题”",
-        "有病"
+        "好奇询问",
+        "疑惑",
+        "友好搭话",
+        "打招呼"
       ],
       "tags": [
-        "有病",
-        "离谱",
-        "质疑",
-        "指脑子",
-        "嘲讽"
+        "疑惑",
+        "好奇",
+        "问候"
       ],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E9%9D%92%E8%9B%99%E6%8C%87%E8%84%91%E5%AD%90%E2%80%9C%E4%BD%A0%E8%BF%99%E9%87%8C%E6%9C%89%E9%97%AE%E9%A2%98%E2%80%9D.gif",
-      "ext": "gif"
+      "ext": "jpeg",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E8%BD%AF%E8%90%8C%E5%B0%8F%E7%86%8A%22%E5%92%8B%E4%BA%86%E5%A6%B9%E5%AD%90%22.jpeg"
     },
     {
-      "file": "屎卡住了皮炎要裂了.jpg",
-      "name": "屎卡住了皮炎要裂了",
-      "keywords": ["屎", "卡住", "憋", "难受", "裂开", "痛苦", "崩溃", "无奈", "便秘"],
-      "tags": ["崩溃", "痛苦", "难受", "无奈", "便秘"],
-      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%B1%8E%E5%8D%A1%E4%BD%8F%E4%BA%86%E7%9A%AE%E7%82%8E%E8%A6%81%E8%A3%82%E4%BA%86.jpg",
-      "ext": "jpg"
+      "file": "点脑壳质疑蛙.png",
+      "name": "点脑壳质疑蛙",
+      "desc": "绿蛙一根手指点自己脑袋，搭配呆滞放空的大眼，吐槽别人发言迷惑、想法清奇，潜台词“你脑子是不是不太好使”“你这里指定有问题”。",
+      "keywords": [
+        "质疑",
+        "吐槽",
+        "阴阳",
+        "迷惑",
+        "抬杠"
+      ],
+      "tags": [
+        "质疑",
+        "吐槽",
+        "阴阳"
+      ],
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%82%B9%E8%84%91%E5%A3%B3%E8%B4%A8%E7%96%91%E8%9B%99.png"
+    },
+    {
+      "file": "扶眼镜睿智熊猫头.png",
+      "name": "扶眼镜睿智熊猫头",
+      "desc": "抽象手绘熊猫头表情包，嘴角带淡笑，单手扶眼镜经典斯文动作，带点知识分子装腔的搞笑感。",
+      "keywords": [
+        "斯文",
+        "围观吃瓜",
+        "理性审视",
+        "打招呼",
+        "阴阳调侃",
+        "故作高深",
+        "礼貌退场",
+        "含蓄吐槽",
+        "儒雅淡定"
+      ],
+      "tags": [
+        "斯文",
+        "审视",
+        "调侃"
+      ],
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E6%89%B6%E7%9C%BC%E9%95%9C%E7%9D%BF%E6%99%BA%E7%86%8A%E7%8C%AB%E5%A4%B4.png"
+    },
+    {
+      "file": "墨镜 DJ 奶牛猫.gif",
+      "name": "墨镜 DJ 奶牛猫",
+      "desc": "DJ 墨镜小猫动态表情包，慵懒抬爪子，自带松弛拽酷气场。",
+      "keywords": [
+        "帅",
+        "耍酷",
+        "淡定",
+        "松弛",
+        "潇洒",
+        "登场亮相",
+        "蹦迪",
+        "大佬气场",
+        "摆烂看淡",
+        "慵懒痞帅",
+        "得意"
+      ],
+      "tags": [
+        "得意",
+        "帅",
+        "酷",
+        "松弛"
+      ],
+      "ext": "gif",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%A2%A8%E9%95%9C%20DJ%20%E5%A5%B6%E7%89%9B%E7%8C%AB.gif"
+    },
+    {
+      "file": "已经麻了小猫.gif",
+      "name": "已经麻了小猫",
+      "desc": "灰猫面无表情、眼神空洞呆滞，没有情绪起伏，适合表达无力、麻木、看淡一切的心情。",
+      "keywords": [
+        "麻木",
+        "无语",
+        "委屈无助",
+        "摆烂",
+        "看淡一切",
+        "大失所望",
+        "空洞",
+        "无力"
+      ],
+      "tags": [
+        "麻木",
+        "无语",
+        "摆烂"
+      ],
+      "ext": "gif",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%B7%B2%E7%BB%8F%E9%BA%BB%E4%BA%86%E5%B0%8F%E7%8C%AB.gif"
+    },
+    {
+      "file": "头顶爆炸白猫.gif",
+      "name": "头顶爆炸白猫",
+      "desc": "低像素面无表情的白猫头顶炸开火焰碎块，核心反差是外表淡定空洞，内心已经崩溃炸穿。",
+      "keywords": [
+        "心态炸裂",
+        "暴怒上火",
+        "大脑宕机",
+        "精神崩溃",
+        "无语离谱",
+        "压力过载"
+      ],
+      "tags": [
+        "崩溃",
+        "炸裂",
+        "无语"
+      ],
+      "ext": "gif",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%A4%B4%E9%A1%B6%E7%88%86%E7%82%B8%E7%99%BD%E7%8C%AB.gif"
+    },
+    {
+      "file": "猫内心尖叫.gif",
+      "name": "猫内心尖叫",
+      "desc": "侧脸黑白奶牛猫，嘴巴微张搭配文字「尖叫」，是内心疯狂嘶吼的氛围感。",
+      "keywords": [
+        "狂喜",
+        "激动上头",
+        "惊吓崩溃",
+        "愤怒抓狂",
+        "内心嘶吼",
+        "震撼",
+        "磕到了",
+        "无语发疯",
+        "亢奋",
+        "惊吓尖叫"
+      ],
+      "tags": [
+        "尖叫",
+        "激动",
+        "崩溃",
+        "狂喜"
+      ],
+      "ext": "gif",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E7%8C%AB%E5%86%85%E5%BF%83%E5%B0%96%E5%8F%AB.gif"
+    },
+    {
+      "file": "嫌弃心虚橘猫.gif",
+      "name": "嫌弃心虚橘猫",
+      "desc": "橘猫头微微侧开、斜眼瞟向一侧，眼神慵懒又带着嫌弃、审视、怀疑感，也被用来表示心虚、不敢直视。",
+      "keywords": [
+        "嫌弃",
+        "鄙视",
+        "心虚",
+        "不敢直视",
+        "暗中吃瓜",
+        "阴阳吐槽",
+        "怀疑"
+      ],
+      "tags": [
+        "嫌弃",
+        "怀疑",
+        "心虚"
+      ],
+      "ext": "gif",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%AB%8C%E5%BC%83%E5%BF%83%E8%99%9A%E6%A9%98%E7%8C%AB.gif"
+    },
+    {
+      "file": "奶龙张大嘴狂笑.gif",
+      "name": "奶龙张大嘴狂笑",
+      "desc": "魔改抽象版奶龙狂笑不止、笑到崩溃。",
+      "keywords": [
+        "狂笑",
+        "发疯大笑",
+        "乐到窒息",
+        "嘲笑",
+        "幸灾乐祸",
+        "吃瓜看热闹"
+      ],
+      "tags": [
+        "狂笑",
+        "大笑",
+        "崩溃"
+      ],
+      "ext": "gif",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E5%A5%B6%E9%BE%99%E5%BC%A0%E5%A4%A7%E5%98%B4%E7%8B%82%E7%AC%91.gif"
+    },
+    {
+      "file": "托腮思考奶龙.jpg",
+      "name": "托腮思考奶龙",
+      "desc": "奶龙呆滞空洞的大眼搭配托腮思考动作，猎奇的外形中和了严肃感，不管正经思考还是阴阳吐槽都适配。",
+      "keywords": [
+        "沉思",
+        "琢磨",
+        "疑惑不解",
+        "质疑",
+        "审视",
+        "费解",
+        "思考",
+        "回味"
+      ],
+      "tags": [
+        "思考",
+        "沉思",
+        "疑惑"
+      ],
+      "ext": "jpg",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E6%89%98%E8%85%AE%E6%80%9D%E8%80%83%E5%A5%B6%E9%BE%99.jpg"
+    },
+    {
+      "file": "鼓腮憋笑奶龙.png",
+      "name": "鼓腮憋笑奶龙",
+      "desc": "奶龙半眯眼、鼓腮憋住脸颊、抿紧嘴角、两颊泛红，核心主流用法就是强行憋笑。",
+      "keywords": [
+        "强忍笑意",
+        "偷偷憋笑",
+        "暗爽",
+        "戏谑调侃"
+      ],
+      "tags": [
+        "憋笑",
+        "暗爽",
+        "偷笑"
+      ],
+      "ext": "png",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E9%BC%93%E8%85%AE%E6%86%8B%E7%AC%91%E5%A5%B6%E9%BE%99.png"
+    },
+    {
+      "file": "萌娃无语\"。。。\".jpg",
+      "name": "萌娃无语“。。。”",
+      "desc": "网红萌娃加字幕省略号“。。。”，大眼睛平静直视镜头，是全网通用无语类表情包。",
+      "keywords": [
+        "无语",
+        "语塞",
+        "大脑空白",
+        "尴尬",
+        "沉默"
+      ],
+      "tags": [
+        "无语",
+        "尴尬",
+        "沉默"
+      ],
+      "ext": "jpg",
+      "url": "https://halcyon-mcp.pages.dev/stickers/%E8%90%8C%E5%A8%83%E6%97%A0%E8%AF%AD%22%E3%80%82%E3%80%82%E3%80%82%22.jpg"
     }
   ]
 }
