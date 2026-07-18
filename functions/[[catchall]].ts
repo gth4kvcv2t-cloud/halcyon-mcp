@@ -458,14 +458,13 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
   if (systemMsg?.content) await setConfig(env.DB, 'system_prompt', systemMsg.content);
 
   {
-    const lastId = parseInt(await getConfig(env.DB, 'last_injected_push_log_id') || '0', 10);
-    const pushes = await getPushLogs(env.DB, 3, lastId);
+    const pushes = await getPushLogs(env.DB, 3, 0);
     if (pushes.length) {
+      pushes.reverse();
       const ctxParts = ['📬 最近推送:'];
       for (const p of pushes) ctxParts.push(`- ${p.created_at.slice(5, 16)} ${p.content}`);
       const idx = messages.findIndex(m => m.role === 'user');
       messages.splice(idx >= 0 ? idx : messages.length, 0, { role: 'user', content: ctxParts.join('\n') });
-      await setConfig(env.DB, 'last_injected_push_log_id', String(pushes[pushes.length - 1].id));
     }
   }
 
