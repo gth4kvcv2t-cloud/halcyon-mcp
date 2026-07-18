@@ -536,9 +536,9 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
 
 // ─── Balance endpoint ──────────────────────────────────────────────────────────
 
-async function handleBalance(request: Request, env: Env): Promise<Response> {
+async function handleBalance(env: Env): Promise<Response> {
   const res = await fetch('https://api.deepseek.com/v1/user/balance', {
-    headers: { Authorization: request.headers.get('Authorization') || `Bearer ${env.DEEPSEEK_API_KEY}` },
+    headers: { Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
   });
   return new Response(res.body, {
     status: res.status,
@@ -561,27 +561,27 @@ async function handleModels(env: Env): Promise<Response> {
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
 
-  // Balance endpoint (Kelivo reads total_balance here)
-  if (url.pathname === '/v1/user/balance') {
-    return await handleBalance(request, env);
+  // All API endpoints require auth
+  const auth = request.headers.get('Authorization');
+  if (url.pathname.startsWith('/v1/') || url.pathname === '/mcp') {
+    if (auth !== `Bearer ${env.MCP_API_KEY}`) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
-  // Models list (Kelivo may request this)
+  if (url.pathname === '/v1/user/balance') {
+    return await handleBalance(env);
+  }
+
   if (url.pathname === '/v1/models') {
     return await handleModels(env);
   }
 
-  // Chat proxy endpoint (for Kelivo)
   if (url.pathname === '/v1/chat/completions' && request.method === 'POST') {
     return await handleProxy(request, env);
   }
 
-  // MCP endpoint
   if (url.pathname === '/mcp' && request.method === 'POST') {
-    const auth = request.headers.get('Authorization');
-    if (auth !== `Bearer ${env.MCP_API_KEY}`) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
     try {
       const body = await request.json();
       return await handleMCP(body, env);
