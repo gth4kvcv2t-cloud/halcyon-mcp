@@ -290,26 +290,42 @@ async function sendBark(key: string, title: string, body: string) {
   });
 }
 
-function buildWakePrompt(systemPrompt: string, lastActivity: string, idleMin: number, weather?: string, isDay?: boolean): { system: string; user: string } {
+async function getRecentHistory(db: D1Database, limit = 8): Promise<string> {
+  const rows = await db.prepare(
+    'SELECT type, detail, created_at FROM activity WHERE type IN (\'user_message\', \'wake_sent\', \'wake_skip\') ORDER BY id DESC LIMIT ?'
+  ).bind(limit).all<{ type: string; detail: string; created_at: string }>();
+  const items = (rows.results || []).reverse();
+  if (!items.length) return '暂无对话记录';
+  return items.map(r => {
+    const label = r.type === 'user_message' ? '用户' : r.type === 'wake_sent' ? 'AI（已推送）' : 'AI（未推送）';
+    return `[${r.created_at.slice(5, 16)}] ${label}: ${r.detail.slice(0, 300)}`;
+  }).join('\n');
+}
+
+function buildWakePrompt(systemPrompt: string, idleMin: number, weather?: string, isDay?: boolean, history?: string): { system: string; user: string } {
   const time = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
   const weatherSection = weather ? `\n## 当前天气\n${weather}` : '';
   const period = isDay !== undefined ? (isDay ? '☀️ 白天' : '🌙 夜间') : '';
 
-  const system = `${systemPrompt}\n\n## 唤醒规则
+  const system = `## 🚨 最高优先级规则
 1. 这是一次后台自动唤醒，不是用户发起的对话。你没有收到任何新消息。
 2. 你的唯一任务是决定是否主动联系用户。不能生成对话回复。
 3. 输出格式必须严格遵守以下二选一。
 
 ## 输出格式
-- 如果你想联系用户，直接写你想说的话。可以是一句话，也可以第一行标题、第二行正文。
-- 如果不想联系，只输出：[NO_ACTION]，可附带简短原因（10字以内）。`;
+- 如果你想联系用户，直接写你想说的话。可以是一句话，也可以第一行标题、第二行正文。系统会自动打包成手机推送发送。
+- 如果不想联系，只输出：[NO_ACTION]，可附带简短原因（10字以内）。
+
+---
+
+${systemPrompt}`;
 
   const user = `## 当前信息
 - 时间：${time}${period ? `\n- ${period}` : ''}
 - 距离你上次说话：${idleMin} 分钟
 
-## 上次活动
-${lastActivity}${weatherSection}
+## 最近动态
+${history || '暂无记录'}${weatherSection}
 
 基于以上信息，决定是否联系用户。`;
 
@@ -342,12 +358,11 @@ async function handleWakeUp(env: Env): Promise<string> {
 
   const [systemPrompt, loc] = await Promise.all([getConfig(env.DB, 'system_prompt'), amapLocation(env)]);
 
-  const lastActivity = lastWake
-    ? `上次唤醒: ${lastWake.detail || lastWake.created_at}`
-    : `上次聊天: ${lastUser.created_at?.slice(11, 16) || '未知'}`;
-
-  const weather = loc?.adcode && loc.adcode.length > 0 ? await amapWeather(env, loc.adcode) : undefined;
-  const { system, user } = buildWakePrompt(systemPrompt || '', lastActivity, idleMin, weather || undefined, day);
+  const [weather, history] = await Promise.all([
+    loc?.adcode && loc.adcode.length > 0 ? amapWeather(env, loc.adcode) : Promise.resolve(undefined),
+    getRecentHistory(env.DB),
+  ]);
+  const { system, user } = buildWakePrompt(systemPrompt || '', idleMin, weather || undefined, day, history);
 
   const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
