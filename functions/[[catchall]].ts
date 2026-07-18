@@ -4,6 +4,8 @@ interface Env {
   BARK_KEY: string;
   MCP_API_KEY: string;
   AMAP_KEY: string;
+  GITHUB_TOKEN: string;
+  GITHUB_REPO?: string;
 }
 
 interface ToolDef {
@@ -577,6 +579,252 @@ async function handleModels(env: Env): Promise<Response> {
   });
 }
 
+// ─── Admin Page ────────────────────────────────────────────────────────────────
+
+function adminPage(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>halcyon 表情包管理</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f5;padding:20px;color:#333}
+.card{background:#fff;border-radius:12px;padding:20px;max-width:500px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+h1{font-size:20px;margin-bottom:20px;text-align:center}
+label{display:block;font-size:14px;font-weight:600;margin:12px 0 4px}
+input,textarea,select{width:100%;padding:10px;font-size:16px;border:1px solid #ddd;border-radius:8px;outline:0}
+input:focus,textarea:focus{border-color:#007aff}
+textarea{height:80px;resize:vertical}
+.preview{margin:12px 0;text-align:center;display:none}
+.preview img{max-width:200px;max-height:200px;border-radius:8px;border:1px solid #eee}
+.btn{width:100%;padding:14px;font-size:16px;font-weight:600;color:#fff;background:#007aff;border:none;border-radius:8px;cursor:pointer;margin-top:16px}
+.btn:disabled{opacity:.5}
+.btn:hover:not(:disabled){background:#0056cc}
+.msg{padding:10px;border-radius:8px;margin:12px 0;display:none;font-size:14px}
+.msg.ok{background:#d4edda;color:#155724;display:block}
+.msg.err{background:#f8d7da;color:#721c24;display:block}
+.hint{font-size:12px;color:#999;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>📎 添加表情包</h1>
+<div id="msg" class="msg"></div>
+<form id="form">
+<label>图片</label>
+<input type="file" id="file" accept="image/*" required>
+<div class="preview" id="preview"><img id="previewImg"></div>
+<div class="hint">建议方形或横图，会自动缩到 200px 宽</div>
+
+<label>名称</label>
+<input type="text" id="name" placeholder="如：奶龙狂笑" required>
+
+<label>理解描述</label>
+<textarea id="desc" placeholder="简单描述表情包的实际含义，让AI理解怎么用"></textarea>
+
+<label>关键词（逗号分隔）</label>
+<input type="text" id="keywords" placeholder="如：开心, 大笑, 狂喜, 哈哈" required>
+
+<button type="submit" class="btn" id="submitBtn">提交</button>
+</form>
+</div>
+<script>
+const form=document.getElementById('form'),file=document.getElementById('file'),
+preview=document.getElementById('preview'),previewImg=document.getElementById('previewImg'),
+msg=document.getElementById('msg'),submitBtn=document.getElementById('submitBtn'),
+nameInput=document.getElementById('name'),descInput=document.getElementById('desc'),
+keywordsInput=document.getElementById('keywords');
+
+file.onchange=()=>{
+  const f=file.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{previewImg.src=e.target.result;preview.style.display='block'};
+  r.readAsDataURL(f);
+};
+
+form.onsubmit=async e=>{
+  e.preventDefault();
+  msg.className='msg';msg.textContent='';msg.style.display='none';
+  const f=file.files[0];if(!f){showMsg('请选择图片','err');return}
+  const name=nameInput.value.trim();if(!name){showMsg('请输入名称','err');return}
+  const kw=keywordsInput.value.trim();if(!kw){showMsg('请输入关键词','err');return}
+
+  submitBtn.disabled=true;submitBtn.textContent='上传中...';
+
+  // Resize on client
+  const resized=await resizeImage(f,200);
+  if(!resized){showMsg('图片处理失败','err');submitBtn.disabled=false;submitBtn.textContent='提交';return}
+
+  const fd=new FormData();
+  fd.append('file',resized,f.name);
+  fd.append('name',name);
+  fd.append('desc',descInput.value.trim());
+  fd.append('keywords',kw);
+
+  try{
+    const res=await fetch('/api/upload-sticker',{method:'POST',body:fd});
+    const data=await res.json();
+    if(res.ok){showMsg('✅ 已提交！等待 Cloudflare Pages 构建部署（约1分钟）','ok');form.reset();preview.style.display='none'}
+    else showMsg('❌ '+data.error,'err');
+  }catch(e){showMsg('❌ 网络错误: '+e.message,'err')}
+  finally{submitBtn.disabled=false;submitBtn.textContent='提交'}
+};
+
+function resizeImage(file,maxW){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>maxW){h=h*maxW/w;w=maxW}
+      const c=document.createElement('canvas');
+      c.width=w;c.height=h;
+      const ctx=c.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      c.toBlob(b=>res(b),file.type,0.85);
+    };
+    img.onerror=()=>res(null);
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+function showMsg(t,type){msg.textContent=t;msg.className='msg '+type;msg.style.display='block'}
+</script>
+</body>
+</html>`;
+}
+
+async function handleAdminUpload(request: Request, env: Env): Promise<Response> {
+  if (!env.GITHUB_TOKEN) {
+    return Response.json({ error: 'GITHUB_TOKEN 未配置，请在 Cloudflare Dashboard 添加环境变量' }, { status: 500 });
+  }
+
+  const repo = env.GITHUB_REPO || 'gth4kvcv2t-cloud/halcyon-mcp';
+  const gh = (path: string, opts?: RequestInit) =>
+    fetch(`https://api.github.com/repos/${repo}/${path}`, {
+      ...opts,
+      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, ...(opts?.headers || {}) },
+    });
+
+  try {
+    const fd = await request.formData();
+    const file = fd.get('file') as File;
+    const name = (fd.get('name') as string || '').trim();
+    const desc = (fd.get('desc') as string || '').trim();
+    const kwStr = (fd.get('keywords') as string || '').trim();
+
+    if (!file || !name || !kwStr) {
+      return Response.json({ error: '缺少必填字段（图片、名称、关键词）' }, { status: 400 });
+    }
+
+    // Determine extension
+    const extMap: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+    const ext = extMap[file.type] || 'png';
+    const filename = `${name}.${ext}`;
+
+    // Read image bytes (already resized client-side)
+    const imageBytes = new Uint8Array(await file.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < imageBytes.length; i++) binary += String.fromCharCode(imageBytes[i]);
+    const b64 = btoa(binary);
+
+    // Read current stickers.json from GitHub
+    const stickersRes = await gh(`contents/public/stickers/stickers.json`);
+    if (!stickersRes.ok) {
+      return Response.json({ error: '读取 stickers.json 失败: ' + (await stickersRes.text()) }, { status: 500 });
+    }
+    const stickersData = await stickersRes.json() as { content: string; sha: string };
+    const stickers: { stickers: any[] } = JSON.parse(atob(stickersData.content));
+
+    // Build new entry
+    const keywords = kwStr.split(/[,，、\s]+/).filter(Boolean);
+    const newSticker = {
+      file: filename,
+      name,
+      desc: desc || undefined,
+      keywords: [...new Set([name, ...keywords])],
+      tags: keywords.slice(0, 5),
+      ext,
+    };
+
+    // Generate URL (percent-encoded)
+    const base = 'https://halcyon-mcp.pages.dev/stickers/';
+    newSticker['url'] = base + encodeURIComponent(filename);
+
+    stickers.stickers.push(newSticker);
+
+    // Create blobs
+    const imgBlob = await gh('git/blobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: b64, encoding: 'base64' }),
+    });
+    if (!imgBlob.ok) return Response.json({ error: '创建图片 blob 失败' }, { status: 500 });
+    const imgBlobData = await imgBlob.json() as { sha: string };
+
+    const stickersJsonStr = JSON.stringify(stickers, null, 2);
+    const stickersB64 = btoa(stickersJsonStr);
+    const stBlob = await gh('git/blobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: stickersB64, encoding: 'base64' }),
+    });
+    if (!stBlob.ok) return Response.json({ error: '创建 stickers.json blob 失败' }, { status: 500 });
+    const stBlobData = await stBlob.json() as { sha: string };
+
+    // Get latest commit
+    const refRes = await gh('git/refs/heads/main');
+    if (!refRes.ok) return Response.json({ error: '读取分支失败' }, { status: 500 });
+    const refData = await refRes.json() as { object: { sha: string } };
+    const latestSha = refData.object.sha;
+
+    const commitRes = await gh(`git/commits/${latestSha}`);
+    const commitData = await commitRes.json() as { tree: { sha: string } };
+    const baseTreeSha = commitData.tree.sha;
+
+    // Create tree
+    const treeRes = await gh('git/trees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: [
+          { path: `public/stickers/${filename}`, mode: '100644', type: 'blob', sha: imgBlobData.sha },
+          { path: 'public/stickers/stickers.json', mode: '100644', type: 'blob', sha: stBlobData.sha },
+        ],
+      }),
+    });
+    if (!treeRes.ok) return Response.json({ error: '创建 tree 失败' }, { status: 500 });
+    const treeData = await treeRes.json() as { sha: string };
+
+    // Create commit
+    const newCommit = await gh('git/commits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `add sticker: ${name}`,
+        tree: treeData.sha,
+        parents: [latestSha],
+      }),
+    });
+    if (!newCommit.ok) return Response.json({ error: '创建 commit 失败' }, { status: 500 });
+    const newCommitData = await newCommit.json() as { sha: string };
+
+    // Update branch
+    const updateRes = await gh('git/refs/heads/main', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sha: newCommitData.sha, force: false }),
+    });
+    if (!updateRes.ok) return Response.json({ error: '更新分支失败' }, { status: 500 });
+
+    return Response.json({ ok: true, name, filename });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
+}
+
 // ─── Pages Function Entry ─────────────────────────────────────────────────────
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -612,6 +860,18 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         { status: 400 },
       );
     }
+  }
+
+  // Admin page
+  if (url.pathname === '/admin' && request.method === 'GET') {
+    return new Response(adminPage(), {
+      headers: { 'Content-Type': 'text/html;charset=utf-8' },
+    });
+  }
+
+  // Upload sticker
+  if (url.pathname === '/api/upload-sticker' && request.method === 'POST') {
+    return await handleAdminUpload(request, env);
   }
 
   // Wake-up endpoint (for cron-job.org)
