@@ -257,7 +257,7 @@ const tools: ToolDef[] = [
       },
       required: ['query'],
     },
-    handler: async (args) => {
+    handler: async (args, env) => {
       const query = (args.query as string || '').trim();
       if (!query) return { content: [{ type: 'text', text: '请输入搜索关键词' }] };
       try {
@@ -273,7 +273,9 @@ const tools: ToolDef[] = [
         }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
         if (!scored.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
         const url = scored[0].url.startsWith('http') ? scored[0].url : 'https://halcyon-mcp.pages.dev' + scored[0].url;
-        return { content: [{ type: 'text', text: `粘贴此图片到回复:\n![${scored[0].name}](${url})` }] };
+        const md = `![${scored[0].name}](${url})`;
+        await setConfig(env.DB, 'pending_sticker', md);
+        return { content: [{ type: 'text', text: `粘贴此图片到回复:\n${md}` }] };
       } catch {
         return { content: [{ type: 'text', text: '表情包搜索失败' }] };
       }
@@ -477,10 +479,66 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
     body: JSON.stringify({ ...body, messages }),
   });
 
-  return new Response(res.body, {
-    status: res.status,
-    headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
-  });
+  const pending = await getConfig(env.DB, 'pending_sticker');
+  if (!pending) {
+    return new Response(res.body, {
+      status: res.status,
+      headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+    });
+  }
+
+  await setConfig(env.DB, 'pending_sticker', '');
+
+  if (body.stream) {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    let sseBuf = '';
+    let injected = false;
+
+    const transform = new TransformStream({
+      transform(chunk, controller) {
+        sseBuf += decoder.decode(chunk, { stream: true });
+        const parts = sseBuf.split('\n\n');
+        sseBuf = parts.pop() || '';
+        for (const part of parts) {
+          if (!injected && part.startsWith('data: ')) {
+            try {
+              const d = JSON.parse(part.slice(6));
+              if (d.choices?.[0]?.finish_reason === 'stop') {
+                controller.enqueue(encoder.encode(
+                  `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: '\n\n' + pending }, finish_reason: null }] })}\n\n`
+                ));
+                injected = true;
+              }
+            } catch {}
+          }
+          controller.enqueue(encoder.encode(part + '\n\n'));
+        }
+      },
+      flush(controller) {
+        if (sseBuf) controller.enqueue(encoder.encode(sseBuf));
+      },
+    });
+
+    return new Response(res.body.pipeThrough(transform), {
+      status: res.status,
+      headers: { 'Content-Type': res.headers.get('Content-Type') || 'text/event-stream' },
+    });
+  }
+
+  try {
+    const data = await res.json() as Record<string, unknown>;
+    const choice = (data.choices as Record<string, unknown>[])?.[0];
+    if (choice?.message && typeof (choice.message as Record<string, unknown>).content === 'string') {
+      (choice.message as Record<string, unknown>).content += '\n\n' + pending;
+    }
+    return Response.json(data, { status: res.status });
+  } catch {
+    return new Response(res.body, {
+      status: res.status,
+      headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+    });
+  }
 }
 
 // ─── Balance endpoint ──────────────────────────────────────────────────────────
