@@ -455,7 +455,12 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
   const body = await request.json() as Record<string, unknown>;
   const messages = (body.messages || []) as { role: string; content: string }[];
   const systemMsg = messages.find(m => m.role === 'system');
-  if (systemMsg?.content) await setConfig(env.DB, 'system_prompt', systemMsg.content);
+  if (systemMsg?.content) {
+    await setConfig(env.DB, 'system_prompt', systemMsg.content);
+    if (!systemMsg.content.includes('表情包规则')) {
+      systemMsg.content += '\n\n📎 表情包规则：调用 search_stickers 后必须将返回的 ![名称](URL) 粘贴在回复中。不允许只描述不贴图。';
+    }
+  }
 
   {
     const lastId = parseInt(await getConfig(env.DB, 'last_injected_push_log_id') || '0', 10);
