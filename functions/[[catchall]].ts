@@ -273,7 +273,7 @@ const tools: ToolDef[] = [
         }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
         if (!scored.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
         const url = scored[0].url.startsWith('http') ? scored[0].url : 'https://halcyon-mcp.pages.dev' + scored[0].url;
-        return { content: [{ type: 'text', text: `![${scored[0].name}](${url})` }] };
+        return { content: [{ type: 'text', text: `粘贴此图片到回复:\n![${scored[0].name}](${url})` }] };
       } catch {
         return { content: [{ type: 'text', text: '表情包搜索失败' }] };
       }
