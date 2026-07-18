@@ -260,6 +260,7 @@ const tools: ToolDef[] = [
         if (!res.ok) return { content: [{ type: 'text', text: '表情包数据加载失败' }] };
         const manifest = await res.json() as { stickers: { file: string; name: string; desc?: string; keywords: string[]; tags: string[]; url: string; ext: string }[] };
         const q = query.toLowerCase();
+        const words = q.split(/\s+/).filter(Boolean);
 
         function charMatch(s: string, qry: string): boolean {
           if (!qry) return false;
@@ -270,9 +271,20 @@ const tools: ToolDef[] = [
         }
 
         const scored = manifest.stickers.map(s => {
-          let score = 0;
           const name = s.name.toLowerCase();
           const allText = name + ' ' + s.keywords.join(' ');
+
+          if (words.length > 1) {
+            let score = 0;
+            for (const w of words) {
+              if (name.includes(w)) score += 2;
+              else if (s.keywords.some(k => k.includes(w) || w.includes(k))) score += 1;
+              else if (charMatch(allText, w)) score += 0.5;
+            }
+            return { ...s, score };
+          }
+
+          let score = 0;
           if (name.includes(q)) score += 2;
           if (s.keywords.some(k => k.includes(q) || q.includes(k))) score += 1;
           if (score === 0 && charMatch(allText, q)) score += 1;
@@ -286,10 +298,6 @@ const tools: ToolDef[] = [
           const url = s.url.startsWith('http') ? s.url : 'https://halcyon-mcp.pages.dev' + s.url;
           return `${i + 1}. ![${s.name}](${url}) — ${s.desc || s.name}`;
         });
-
-        if (top.length === 1) {
-          await setConfig(env.DB, 'pending_sticker', `![${top[0].name}](${top[0].url}) — ${top[0].desc || top[0].name}`);
-        }
 
         return { content: [{ type: 'text', text: lines.join('\n') }] };
       } catch {
@@ -495,66 +503,10 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
     body: JSON.stringify({ ...body, messages }),
   });
 
-  const pending = await getConfig(env.DB, 'pending_sticker');
-  if (!pending) {
-    return new Response(res.body, {
-      status: res.status,
-      headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
-    });
-  }
-
-  await setConfig(env.DB, 'pending_sticker', '');
-
-  if (body.stream) {
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    let sseBuf = '';
-    let injected = false;
-
-    const transform = new TransformStream({
-      transform(chunk, controller) {
-        sseBuf += decoder.decode(chunk, { stream: true });
-        const parts = sseBuf.split('\n\n');
-        sseBuf = parts.pop() || '';
-        for (const part of parts) {
-          if (!injected && part.startsWith('data: ')) {
-            try {
-              const d = JSON.parse(part.slice(6));
-              if (d.choices?.[0]?.finish_reason === 'stop') {
-                controller.enqueue(encoder.encode(
-                  `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: '\n\n' + pending }, finish_reason: null }] })}\n\n`
-                ));
-                injected = true;
-              }
-            } catch {}
-          }
-          controller.enqueue(encoder.encode(part + '\n\n'));
-        }
-      },
-      flush(controller) {
-        if (sseBuf) controller.enqueue(encoder.encode(sseBuf));
-      },
-    });
-
-    return new Response(res.body.pipeThrough(transform), {
-      status: res.status,
-      headers: { 'Content-Type': res.headers.get('Content-Type') || 'text/event-stream' },
-    });
-  }
-
-  try {
-    const data = await res.json() as Record<string, unknown>;
-    const choice = (data.choices as Record<string, unknown>[])?.[0];
-    if (choice?.message && typeof (choice.message as Record<string, unknown>).content === 'string') {
-      (choice.message as Record<string, unknown>).content += '\n\n' + pending;
-    }
-    return Response.json(data, { status: res.status });
-  } catch {
-    return new Response(res.body, {
-      status: res.status,
-      headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
-    });
-  }
+  return new Response(res.body, {
+    status: res.status,
+    headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+  });
 }
 
 // ─── Balance endpoint ──────────────────────────────────────────────────────────
