@@ -405,7 +405,7 @@ async function handleWakeUp(env: Env): Promise<string> {
   const data = await res.json() as { choices?: { message: { content: string } }[] };
   const raw = data.choices?.[0]?.message?.content?.trim() || '';
 
-  const noActionMatch = raw.match(/^\[NO_ACTION\]\s*(.*)/);
+  const noActionMatch = raw.match(/^\[no_action\]\s*(.*)/i);
   if (noActionMatch) {
     const reason = noActionMatch[1]?.trim() || '';
     await logActivity(env.DB, 'wake_skip', `[未发送] ${reason}`);
