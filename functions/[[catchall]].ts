@@ -259,7 +259,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'search_stickers',
-    description: '搜索表情包。传入任何与情绪、角色、动作相关的关键词即可。返回的图片列表中选最合适的贴到回复里。每次调用后如果觉得合适，务必贴出图片。粘贴格式：![名称](URL)。AI不会自动帮你贴，你必须手动在回复中粘贴。',
+    description: '搜索表情包。传入任何与情绪、角色、动作相关的关键词即可。返回的图片列表中选最合适的贴到回复里。如果觉得某张合适，在回复中写 ▶1/▶2/▶3 会自动贴出图片。不合适的不要写。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -309,10 +309,16 @@ const tools: ToolDef[] = [
         if (!scored.length) return { content: [{ type: 'text', text: `没有找到与"${query}"相关的表情包` }] };
 
         const top = scored.slice(0, 3);
-        const lines = top.map((s, i) => {
+        const lines = top.map((s, i) =>
+          `${i + 1}. ${s.name} — ${s.desc || s.name}（要贴的话写 ▶${i + 1}）`
+        );
+
+        const results: { name: string; url: string }[] = [];
+        for (const s of top) {
           const url = s.url.startsWith('http') ? s.url : 'https://halcyon-mcp.pages.dev' + s.url;
-          return `${i + 1}. ![${s.name}](${url}) — ${s.desc || s.name}`;
-        });
+          results.push({ name: s.name, url });
+        }
+        await setConfig(env.DB, 'sticker_results', JSON.stringify(results));
 
         return { content: [{ type: 'text', text: lines.join('\n') }] };
       } catch {
@@ -512,28 +518,37 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
   const lastUserMsg = messages.filter(m => m.role === 'user').pop();
   if (lastUserMsg?.content) await logActivity(env.DB, 'user_message', lastUserMsg.content.slice(0, 200));
 
-  const hadStickerResult = lastUserMsg?.content?.includes('![') || false;
-
   const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
     body: JSON.stringify({ ...body, messages }),
   });
 
-  if (!hadStickerResult || body.stream) {
+  const stickerResultsJson = await getConfig(env.DB, 'sticker_results');
+  if (!stickerResultsJson || body.stream) {
     return new Response(res.body, {
       status: res.status,
       headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
     });
   }
 
+  await setConfig(env.DB, 'sticker_results', '');
+
   try {
     const data = await res.json() as Record<string, unknown>;
     const choice = (data.choices as Record<string, unknown>[])?.[0];
     if (choice?.message && typeof (choice.message as Record<string, unknown>).content === 'string') {
       const content = (choice.message as Record<string, unknown>).content as string;
-      if (!content.includes('![')) {
-        (choice.message as Record<string, unknown>).content = content + '\n\n（喂，搜了表情包不贴出来？）';
+      const results = JSON.parse(stickerResultsJson) as { name: string; url: string }[];
+      const match = content.match(/▶(\d+)/);
+      if (match) {
+        const idx = parseInt(match[1]) - 1;
+        const sticker = results[idx];
+        if (sticker) {
+          (choice.message as Record<string, unknown>).content = content.replace(/▶\d+/, `![${sticker.name}](${sticker.url})`);
+        }
+      } else {
+        (choice.message as Record<string, unknown>).content = content + '\n\n（搜了表情包要贴吗？回 ▶1/▶2/▶3 贴对应的）';
       }
     }
     return Response.json(data, { status: res.status });
