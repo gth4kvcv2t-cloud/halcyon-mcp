@@ -105,6 +105,47 @@ async function amapWeather(env: Env, adcode: string, forecast?: boolean) {
   return null;
 }
 
+// ─── Xiaohongshu Parser ───────────────────────────────────────────────────────
+
+async function parseXiaohongshu(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return `页面不可达 (${res.status})`;
+  const html = await res.text();
+  if (!html.includes('__INITIAL_STATE__')) {
+    const title = html.match(/<title>([^<]*)<\/title>/i)?.[1] || '';
+    return `需要有效链接（含 xsec_token）。页面返回: ${title}`;
+  }
+  const match = html.match(/__INITIAL_STATE__\s*=\s*([\s\S]*?)<\/script>/);
+  if (!match) return '解析页面数据失败，页面结构可能已变更';
+  const state = JSON.parse(match[1].replace(/:undefined\b/g, ':null').replace(/,undefined\b/g, ',null'));
+  const noteMap = state?.note?.noteDetailMap;
+  if (!noteMap) return '未找到笔记内容，可能需登录或链接不含 xsec_token';
+  const key = Object.keys(noteMap)[0];
+  if (!key) return '未找到笔记内容，可能需登录或链接不含 xsec_token';
+
+  const parse = (s: any) => typeof s === 'string' ? JSON.parse(s) : s || {};
+  const src = noteMap[key]?.note_card || noteMap[key]?.note || {};
+  const nc = src.note_card || src;
+  const title = nc.title || src.title || '无标题';
+  const desc = nc.desc || src.desc || '';
+  const user = nc.user || parse(src.user) || {};
+  const interact = nc.interact_info || parse(src.interactInfo) || {};
+  const time = nc.time || src.time;
+  const imageList = nc.image_list || parse(src.imageList) || [];
+  const tagList = nc.tag_list || parse(src.tagList) || [];
+
+  let r = `标题: ${title}\n作者: ${user.nickname || '未知'}\n`;
+  if (desc) r += `\n正文:\n${desc}\n`;
+  r += `\n👍 ${interact.liked_count || interact.likedCount || 0}  💬 ${interact.comment_count || interact.commentCount || 0}  ⭐ ${interact.collected_count || interact.collectedCount || 0}  🔗 ${interact.share_count || interact.shareCount || 0}\n`;
+  if (time) r += `发布时间: ${new Date(time).toLocaleString('zh-CN')}\n`;
+  if (imageList.length) r += `图片: ${imageList.length}张\n`;
+  if (tagList.length) r += `标签: ${tagList.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean).join(', ')}\n`;
+  return r;
+}
+
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
 const tools: ToolDef[] = [
@@ -154,44 +195,8 @@ const tools: ToolDef[] = [
       const url = args.url as string;
       if (!url) return { content: [{ type: 'text', text: '请提供URL' }] };
       try {
-        const res = await fetch(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
-          signal: AbortSignal.timeout(15000),
-        });
-        if (!res.ok) return { content: [{ type: 'text', text: `页面不可达 (${res.status})` }] };
-        const html = await res.text();
-        if (!html.includes('__INITIAL_STATE__')) {
-          const title = html.match(/<title>([^<]*)<\/title>/i)?.[1] || '';
-          return { content: [{ type: 'text', text: `需要有效链接（含 xsec_token）。页面返回: ${title}` }] };
-        }
-        const match = html.match(/__INITIAL_STATE__\s*=\s*([\s\S]*?)<\/script>/);
-        if (!match) return { content: [{ type: 'text', text: '解析页面数据失败，页面结构可能已变更' }] };
-        const state = JSON.parse(match[1].replace(/:undefined\b/g, ':null').replace(/,undefined\b/g, ',null'));
-        const noteMap = state?.note?.noteDetailMap;
-        if (!noteMap) return { content: [{ type: 'text', text: '未找到笔记内容，可能需登录或链接不含 xsec_token' }] };
-        const key = Object.keys(noteMap)[0];
-        if (!key) return { content: [{ type: 'text', text: '未找到笔记内容，可能需登录或链接不含 xsec_token' }] };
-
-        const parse = (s: any) => typeof s === 'string' ? JSON.parse(s) : s || {};
-
-        // support both /explore/ (note_card) and /discovery/item/ (note) formats
-        const src = noteMap[key]?.note_card || noteMap[key]?.note || {};
-        const nc = src.note_card || src;
-        const title = nc.title || src.title || '无标题';
-        const desc = nc.desc || src.desc || '';
-        const user = nc.user || parse(src.user) || {};
-        const interact = nc.interact_info || parse(src.interactInfo) || {};
-        const time = nc.time || src.time;
-        const imageList = nc.image_list || parse(src.imageList) || [];
-        const tagList = nc.tag_list || parse(src.tagList) || [];
-
-        let r = `标题: ${title}\n作者: ${user.nickname || '未知'}\n`;
-        if (desc) r += `\n正文:\n${desc}\n`;
-        r += `\n👍 ${interact.liked_count || interact.likedCount || 0}  💬 ${interact.comment_count || interact.commentCount || 0}  ⭐ ${interact.collected_count || interact.collectedCount || 0}  🔗 ${interact.share_count || interact.shareCount || 0}\n`;
-        if (time) r += `发布时间: ${new Date(time).toLocaleString('zh-CN')}\n`;
-        if (imageList.length) r += `图片: ${imageList.length}张\n`;
-        if (tagList.length) r += `标签: ${tagList.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean).join(', ')}\n`;
-        return { content: [{ type: 'text', text: r }] };
+        const text = await parseXiaohongshu(url);
+        return { content: [{ type: 'text', text }] };
       } catch (e) {
         return { content: [{ type: 'text', text: `读取失败: ${e instanceof Error ? e.message : e}` }] };
       }
@@ -199,7 +204,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'read_url',
-    description: '读取网页内容并转为markdown格式，适合LLM阅读分析。发链接给AI时AI会自动调用。',
+    description: '读取网页内容并转为markdown格式，适合LLM阅读分析。发链接给AI时AI会自动调用。小红书链接会自动使用专用解析。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -211,6 +216,16 @@ const tools: ToolDef[] = [
       const url = args.url as string;
       if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
         return { content: [{ type: 'text', text: '请提供有效的URL' }] };
+      }
+
+      // Route xiaohongshu URLs to dedicated parser
+      if (/xiaohongshu\.com|xhslink\.com/i.test(url)) {
+        try {
+          const text = await parseXiaohongshu(url);
+          return { content: [{ type: 'text', text }] };
+        } catch (e) {
+          return { content: [{ type: 'text', text: `读取失败: ${e instanceof Error ? e.message : e}` }] };
+        }
       }
 
       const tryFetch = async (signal: AbortSignal) => {
@@ -244,7 +259,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'search_stickers',
-    description: '搜索表情包。传入任何与情绪、角色、动作相关的关键词即可。返回的图片编号列表中，选最合适的贴到回复里。调用后必须在回复中粘贴![名称](URL)。',
+    description: '搜索表情包。传入任何与情绪、角色、动作相关的关键词即可。返回的图片列表中选最合适的贴到回复里。每次调用后如果觉得合适，务必贴出图片。粘贴格式：![名称](URL)。AI不会自动帮你贴，你必须手动在回复中粘贴。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -497,16 +512,37 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
   const lastUserMsg = messages.filter(m => m.role === 'user').pop();
   if (lastUserMsg?.content) await logActivity(env.DB, 'user_message', lastUserMsg.content.slice(0, 200));
 
+  const hadStickerResult = lastUserMsg?.content?.includes('![') || false;
+
   const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
     body: JSON.stringify({ ...body, messages }),
   });
 
-  return new Response(res.body, {
-    status: res.status,
-    headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
-  });
+  if (!hadStickerResult || body.stream) {
+    return new Response(res.body, {
+      status: res.status,
+      headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+    });
+  }
+
+  try {
+    const data = await res.json() as Record<string, unknown>;
+    const choice = (data.choices as Record<string, unknown>[])?.[0];
+    if (choice?.message && typeof (choice.message as Record<string, unknown>).content === 'string') {
+      const content = (choice.message as Record<string, unknown>).content as string;
+      if (!content.includes('![')) {
+        (choice.message as Record<string, unknown>).content = content + '\n\n（喂，搜了表情包不贴出来？）';
+      }
+    }
+    return Response.json(data, { status: res.status });
+  } catch {
+    return new Response(res.body, {
+      status: res.status,
+      headers: { 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
+    });
+  }
 }
 
 // ─── Balance endpoint ──────────────────────────────────────────────────────────
