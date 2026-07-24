@@ -921,7 +921,7 @@ async function handleAdminUpload(request: Request, env: Env): Promise<Response> 
   const gh = (path: string, opts?: RequestInit) =>
     fetch(`https://api.github.com/repos/${repo}/${path}`, {
       ...opts,
-      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, ...(opts?.headers || {}) },
+      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, 'User-Agent': 'halcyon-mcp', ...(opts?.headers || {}) },
     });
 
   try {
@@ -1049,7 +1049,7 @@ async function handleListStickers(env: Env): Promise<Response> {
   if (!ghToken) return Response.json({ error: 'GITHUB_TOKEN not configured' }, { status: 500 });
   const repo = env.GITHUB_REPO || 'gth4kvcv2t-cloud/halcyon-mcp';
   const res = await fetch(`https://api.github.com/repos/${repo}/contents/public/stickers/stickers.json`, {
-    headers: { Authorization: `Bearer ${ghToken}` },
+    headers: { Authorization: `Bearer ${ghToken}`, 'User-Agent': 'halcyon-mcp' },
   });
   if (!res.ok) return Response.json({ error: '读取 stickers.json 失败: ' + (await res.text()) }, { status: 500 });
   const data = await res.json() as { content: string; sha: string };
@@ -1066,7 +1066,7 @@ async function handleDeleteSticker(request: Request, env: Env): Promise<Response
   const gh = (path: string, opts?: RequestInit) =>
     fetch(`https://api.github.com/repos/${repo}/${path}`, {
       ...opts,
-      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, ...(opts?.headers || {}) },
+      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, 'User-Agent': 'halcyon-mcp', ...(opts?.headers || {}) },
     });
 
   try {
