@@ -1266,11 +1266,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         });
       }
       const session = await signSession(env.MCP_API_KEY);
-      return new Response(null, {
-        status: 302,
+      return new Response(adminPage(), {
         headers: {
-          Location: '/admin',
-          'Set-Cookie': `admin_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400`,
+          'Content-Type': 'text/html;charset=utf-8',
+          'Set-Cookie': `admin_session=${session}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400`,
         },
       });
     } catch {
