@@ -1150,6 +1150,70 @@ async function handleDeleteSticker(request: Request, env: Env): Promise<Response
   }
 }
 
+// ─── Cookie Auth ──────────────────────────────────────────────────────────────
+
+async function signSession(secret: string): Promise<string> {
+  const exp = Date.now() + 86400000; // 24h
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const payload = btoa(JSON.stringify({ exp }));
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(payload)));
+  const sigB64 = btoa(String.fromCharCode(...sig));
+  return payload + '.' + sigB64;
+}
+
+async function verifySession(session: string, secret: string): Promise<boolean> {
+  const parts = session.split('.');
+  if (parts.length !== 2) return false;
+  try {
+    const payload = JSON.parse(atob(parts[0]));
+    if (Date.now() > payload.exp) return false;
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+    const sig = new Uint8Array([...atob(parts[1])].map(c => c.charCodeAt(0)));
+    return await crypto.subtle.verify('HMAC', key, sig, encoder.encode(parts[0]));
+  } catch { return false; }
+}
+
+function getCookie(name: string, cookieHeader: string | null): string | null {
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq > 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return null;
+}
+
+function loginPage(error?: string): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>halcyon 管理 - 登录</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.card{background:#fff;border-radius:12px;padding:30px;max-width:360px;width:100%;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+h1{font-size:20px;margin-bottom:20px;text-align:center}
+input{width:100%;padding:12px;font-size:16px;border:1px solid #ddd;border-radius:8px;outline:0;margin-bottom:12px}
+input:focus{border-color:#007aff}
+.btn{width:100%;padding:13px;font-size:16px;font-weight:600;color:#fff;background:#007aff;border:none;border-radius:8px;cursor:pointer}
+.btn:hover{background:#0056cc}
+.err{color:#ff3b30;font-size:14px;text-align:center;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>halcyon 管理</h1>
+${error ? `<div class="err">${error}</div>` : ''}
+<form method="post" action="/admin">
+<input type="password" name="password" placeholder="请输入管理员密码" autofocus required>
+<button type="submit" class="btn">登录</button>
+</form>
+</div>
+</body>
+</html>`;
+}
+
 // ─── Pages Function Entry ─────────────────────────────────────────────────────
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -1187,12 +1251,47 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
-  // Admin routes require ?key= password
+  // Admin routes require cookie session
   const isAdminRoute = url.pathname === '/admin' || url.pathname === '/api/settings' || url.pathname === '/api/push-logs' || url.pathname === '/api/push-log' || url.pathname === '/api/stickers' || url.pathname === '/api/sticker' || url.pathname === '/api/upload-sticker';
+
+  // Admin login
+  if (url.pathname === '/admin' && request.method === 'POST') {
+    try {
+      const fd = await request.formData();
+      const password = fd.get('password') as string;
+      if (password !== env.MCP_API_KEY) {
+        return new Response(loginPage('密码错误'), {
+          status: 401,
+          headers: { 'Content-Type': 'text/html;charset=utf-8' },
+        });
+      }
+      const session = await signSession(env.MCP_API_KEY);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: '/admin',
+          'Set-Cookie': `admin_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400`,
+        },
+      });
+    } catch {
+      return new Response(loginPage('请求错误'), {
+        status: 400,
+        headers: { 'Content-Type': 'text/html;charset=utf-8' },
+      });
+    }
+  }
+
+  // Session check for admin routes
   if (isAdminRoute) {
-    const key = url.searchParams.get('key');
-    if (key !== env.MCP_API_KEY) {
-      return new Response('Unauthorized', { status: 401 });
+    const cookie = getCookie('admin_session', request.headers.get('Cookie'));
+    const valid = cookie ? await verifySession(cookie, env.MCP_API_KEY) : false;
+    if (!valid) {
+      if (url.pathname === '/admin') {
+        return new Response(loginPage(), {
+          headers: { 'Content-Type': 'text/html;charset=utf-8' },
+        });
+      }
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }
 
