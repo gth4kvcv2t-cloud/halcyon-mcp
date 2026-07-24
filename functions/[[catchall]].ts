@@ -1187,6 +1187,15 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     }
   }
 
+  // Admin routes require ?key= password
+  const isAdminRoute = url.pathname === '/admin' || url.pathname === '/api/settings' || url.pathname === '/api/push-logs' || url.pathname === '/api/push-log' || url.pathname === '/api/stickers' || url.pathname === '/api/sticker' || url.pathname === '/api/upload-sticker';
+  if (isAdminRoute) {
+    const key = url.searchParams.get('key');
+    if (key !== env.MCP_API_KEY) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+  }
+
   // Admin page
   if (url.pathname === '/admin' && request.method === 'GET') {
     return new Response(adminPage(), {
