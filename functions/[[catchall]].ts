@@ -79,6 +79,22 @@ async function getPushLogs(db: D1Database, limit = 5) {
   return (await db.prepare('SELECT * FROM push_log ORDER BY id DESC LIMIT ?').bind(limit).all()).results as { id: number; content: string; created_at: string }[];
 }
 
+async function getWakeConfig(db: D1Database) {
+  const rows = await db.prepare("SELECT key, value FROM config WHERE key LIKE 'wake_%'").all();
+  const cfg: Record<string, string> = {};
+  for (const row of (rows.results || []) as { key: string; value: string }[]) {
+    cfg[row.key] = row.value;
+  }
+  return {
+    enabled: cfg.wake_enabled !== 'false',
+    dayStart: parseInt(cfg.wake_day_start || '8'),
+    dayEnd: parseInt(cfg.wake_day_end || '23'),
+    idleDay: parseInt(cfg.wake_idle_day || '60'),
+    idleNight: parseInt(cfg.wake_idle_night || '180'),
+    cooldown: parseInt(cfg.wake_cooldown || '240') * 60000,
+  };
+}
+
 // ─── Amap ─────────────────────────────────────────────────────────────────────
 
 async function amapLocation(env: Env) {
@@ -380,19 +396,18 @@ ${history || '暂无记录'}${weatherSection}
   return { system, user };
 }
 
-function isDaytime(): boolean {
-  const d = new Date();
-  const bjHour = (d.getUTCHours() + 8) % 24;
-  return bjHour >= 8 && bjHour < 23;
+function isDaytime(hour: number): boolean {
+  return false; // placeholder — actual check in handleWakeUp
 }
 
 async function handleWakeUp(env: Env): Promise<string> {
-  const [lastUser, lastWake] = await Promise.all([getLastUserMsg(env.DB), getLastWake(env.DB)]);
+  const [lastUser, lastWake, wc] = await Promise.all([getLastUserMsg(env.DB), getLastWake(env.DB), getWakeConfig(env.DB)]);
   if (!lastUser) return 'no_activity';
+  if (!wc.enabled) return 'wake_disabled';
 
-  const day = isDaytime();
-  const idleThreshold = day ? 60 : 180;
-  const wakeCooldown = 14400000; // 4h
+  const bjHour = (new Date().getUTCHours() + 8) % 24;
+  const day = bjHour >= wc.dayStart && bjHour < wc.dayEnd;
+  const idleThreshold = day ? wc.idleDay : wc.idleNight;
 
   const now = Date.now();
   const idleMs = now - new Date(lastUser.created_at + '+08:00').getTime();
@@ -401,7 +416,7 @@ async function handleWakeUp(env: Env): Promise<string> {
 
   if (lastWake) {
     const wakeMs = now - new Date(lastWake.created_at + '+08:00').getTime();
-    if (wakeMs < wakeCooldown) return 'recent_wake';
+    if (wakeMs < wc.cooldown) return 'recent_wake';
   }
 
   const [systemPrompt, loc] = await Promise.all([getConfig(env.DB, 'system_prompt'), amapLocation(env)]);
@@ -589,6 +604,58 @@ async function handleModels(env: Env): Promise<Response> {
   });
 }
 
+// ─── Settings / Push Log API ───────────────────────────────────────────────────
+
+async function handleGetSettings(env: Env): Promise<Response> {
+  const wc = await getWakeConfig(env.DB);
+  return Response.json({
+    wake_enabled: wc.enabled,
+    wake_day_start: wc.dayStart,
+    wake_day_end: wc.dayEnd,
+    wake_idle_day: wc.idleDay,
+    wake_idle_night: wc.idleNight,
+    wake_cooldown: Math.floor(wc.cooldown / 60000),
+  });
+}
+
+async function handleSaveSettings(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    const pairs: [string, string][] = [
+      ['wake_enabled', String(body.wake_enabled ?? true)],
+      ['wake_day_start', String(body.wake_day_start ?? 8)],
+      ['wake_day_end', String(body.wake_day_end ?? 23)],
+      ['wake_idle_day', String(body.wake_idle_day ?? 60)],
+      ['wake_idle_night', String(body.wake_idle_night ?? 180)],
+      ['wake_cooldown', String(body.wake_cooldown ?? 240)],
+    ];
+    const stmt = env.DB.prepare('INSERT OR REPLACE INTO config (key, value, updated_at) VALUES (?, ?, ?)');
+    for (const [k, v] of pairs) {
+      await stmt.bind(k, v, nowISO()).run();
+    }
+    return Response.json({ ok: true });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
+}
+
+async function handleListPushLogs(env: Env): Promise<Response> {
+  const rows = await env.DB.prepare('SELECT id, content, created_at FROM push_log ORDER BY id DESC LIMIT 50').all();
+  return Response.json((rows.results || []) as { id: number; content: string; created_at: string }[]);
+}
+
+async function handleDeletePushLog(request: Request, env: Env): Promise<Response> {
+  const id = new URL(request.url).searchParams.get('id');
+  if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+  await env.DB.prepare('DELETE FROM push_log WHERE id = ?').bind(parseInt(id)).run();
+  return Response.json({ ok: true });
+}
+
+async function handleClearPushLogs(env: Env): Promise<Response> {
+  await env.DB.prepare('DELETE FROM push_log').run();
+  return Response.json({ ok: true });
+}
+
 // ─── Admin Page ────────────────────────────────────────────────────────────────
 
 function adminPage(): string {
@@ -597,56 +664,163 @@ function adminPage(): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>halcyon 表情包管理</title>
+<title>halcyon 管理</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f5;padding:20px;color:#333}
-.card{background:#fff;border-radius:12px;padding:20px;max-width:500px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,.1)}
-h1{font-size:20px;margin-bottom:20px;text-align:center}
-label{display:block;font-size:14px;font-weight:600;margin:12px 0 4px}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f5;padding:20px;color:#333;max-width:560px;margin:0 auto}
+.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+h2{font-size:18px;margin-bottom:16px;display:flex;align-items:center;gap:6px}
+label{display:block;font-size:14px;font-weight:600;margin:10px 0 4px}
+.inline{display:flex;align-items:center;gap:8px}
+.inline label{margin:0}
 input,textarea,select{width:100%;padding:10px;font-size:16px;border:1px solid #ddd;border-radius:8px;outline:0}
 input:focus,textarea:focus{border-color:#007aff}
-textarea{height:80px;resize:vertical}
-.preview{margin:12px 0;text-align:center;display:none}
-.preview img{max-width:200px;max-height:200px;border-radius:8px;border:1px solid #eee}
-.btn{width:100%;padding:14px;font-size:16px;font-weight:600;color:#fff;background:#007aff;border:none;border-radius:8px;cursor:pointer;margin-top:16px}
+input[type=number]{width:80px}
+input[type=checkbox]{width:18px;height:18px}
+textarea{height:60px;resize:vertical}
+.btn{width:100%;padding:12px;font-size:15px;font-weight:600;color:#fff;background:#007aff;border:none;border-radius:8px;cursor:pointer;margin-top:12px}
 .btn:disabled{opacity:.5}
 .btn:hover:not(:disabled){background:#0056cc}
-.msg{padding:10px;border-radius:8px;margin:12px 0;display:none;font-size:14px}
+.btn-danger{background:#ff3b30}
+.btn-danger:hover:not(:disabled){background:#cc2f26}
+.btn-sm{padding:6px 12px;font-size:13px;width:auto;margin:0}
+.msg{padding:10px;border-radius:8px;margin:10px 0;display:none;font-size:14px}
 .msg.ok{background:#d4edda;color:#155724;display:block}
 .msg.err{background:#f8d7da;color:#721c24;display:block}
+.row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;font-size:14px}
+.row:last-child{border:none}
+.row .time{color:#999;font-size:12px;flex-shrink:0;margin-right:8px}
+.row .text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 8px}
 .hint{font-size:12px;color:#999;margin-top:4px}
+.preview{margin:12px 0;text-align:center;display:none}
+.preview img{max-width:200px;max-height:200px;border-radius:8px;border:1px solid #eee}
+.loading{text-align:center;color:#999;padding:20px}
 </style>
 </head>
 <body>
+
 <div class="card">
-<h1>📎 添加表情包</h1>
-<div id="msg" class="msg"></div>
-<form id="form">
+<h2>📳 推送设置</h2>
+<div id="settingsMsg" class="msg"></div>
+<form id="settingsForm">
+<div class="inline">
+  <input type="checkbox" id="wake_enabled" checked>
+  <label for="wake_enabled">启用自动唤醒</label>
+</div>
+<label>白天时段</label>
+<div class="inline">
+  <input type="number" id="wake_day_start" min="0" max="23"> 点 —
+  <input type="number" id="wake_day_end" min="0" max="23"> 点
+</div>
+<label>白天空闲阈值（分钟，不说话多久后允许唤醒）</label>
+<input type="number" id="wake_idle_day" min="1" max="1440">
+<label>夜间空闲阈值（分钟）</label>
+<input type="number" id="wake_idle_night" min="1" max="1440">
+<label>推送冷却（分钟，推完后多久内不再推）</label>
+<input type="number" id="wake_cooldown" min="1" max="1440">
+<div class="hint">cron-job.org 检查间隔建议设为 10 分钟</div>
+<button type="submit" class="btn" id="settingsBtn">保存设置</button>
+</form>
+</div>
+
+<div class="card">
+<h2>📋 推送记录 <button class="btn-sm btn-danger" id="clearAllBtn" onclick="clearAll()">清空全部</button></h2>
+<div id="pushLogsMsg" class="msg"></div>
+<div id="pushLogsList"><div class="loading">加载中...</div></div>
+</div>
+
+<div class="card">
+<h2>📎 添加表情包</h2>
+<div id="stickerMsg" class="msg"></div>
+<form id="stickerForm">
 <label>图片</label>
 <input type="file" id="file" accept="image/*" required>
 <div class="preview" id="preview"><img id="previewImg"></div>
 <div class="hint">建议方形或横图，会自动缩到 200px 宽</div>
-
 <label>名称</label>
 <input type="text" id="name" placeholder="如：奶龙狂笑" required>
-
 <label>理解描述</label>
 <textarea id="desc" placeholder="简单描述表情包的实际含义，让AI理解怎么用"></textarea>
-
 <label>关键词（逗号分隔）</label>
 <input type="text" id="keywords" placeholder="如：开心, 大笑, 狂喜, 哈哈" required>
-
-<button type="submit" class="btn" id="submitBtn">提交</button>
+<button type="submit" class="btn" id="stickerBtn">提交</button>
 </form>
 </div>
-<script>
-const form=document.getElementById('form'),file=document.getElementById('file'),
-preview=document.getElementById('preview'),previewImg=document.getElementById('previewImg'),
-msg=document.getElementById('msg'),submitBtn=document.getElementById('submitBtn'),
-nameInput=document.getElementById('name'),descInput=document.getElementById('desc'),
-keywordsInput=document.getElementById('keywords');
 
+<script>
+// ── Settings ──
+let settingsLoaded = false;
+fetch('/api/settings').then(r=>r.json()).then(d=>{
+  document.getElementById('wake_enabled').checked = d.wake_enabled !== false;
+  document.getElementById('wake_day_start').value = d.wake_day_start;
+  document.getElementById('wake_day_end').value = d.wake_day_end;
+  document.getElementById('wake_idle_day').value = d.wake_idle_day;
+  document.getElementById('wake_idle_night').value = d.wake_idle_night;
+  document.getElementById('wake_cooldown').value = d.wake_cooldown;
+  settingsLoaded = true;
+});
+
+document.getElementById('settingsForm').onsubmit = async e => {
+  e.preventDefault();
+  if (!settingsLoaded) return;
+  const btn = document.getElementById('settingsBtn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        wake_enabled: document.getElementById('wake_enabled').checked,
+        wake_day_start: parseInt(document.getElementById('wake_day_start').value),
+        wake_day_end: parseInt(document.getElementById('wake_day_end').value),
+        wake_idle_day: parseInt(document.getElementById('wake_idle_day').value),
+        wake_idle_night: parseInt(document.getElementById('wake_idle_night').value),
+        wake_cooldown: parseInt(document.getElementById('wake_cooldown').value),
+      }),
+    });
+    const d = await r.json();
+    showMsg('settingsMsg', d.ok ? '✅ 已保存' : '❌ '+d.error, d.ok ? 'ok' : 'err');
+  } catch(e) { showMsg('settingsMsg', '❌ 网络错误', 'err'); }
+  finally { btn.disabled = false; btn.textContent = '保存设置'; }
+};
+
+// ── Push Logs ──
+function loadPushLogs() {
+  fetch('/api/push-logs').then(r=>r.json()).then(rows => {
+    const list = document.getElementById('pushLogsList');
+    if (!rows.length) { list.innerHTML = '<div class="hint" style="text-align:center">暂无记录</div>'; return; }
+    list.innerHTML = rows.map(r =>
+      '<div class="row">' +
+      '<span class="time">'+r.created_at.slice(5,16)+'</span>' +
+      '<span class="text">'+esc(r.content.slice(0,50))+'</span>' +
+      '<button class="btn-sm btn-danger" onclick="delLog('+r.id+')">删</button>' +
+      '</div>'
+    ).join('');
+  }).catch(() => {
+    document.getElementById('pushLogsList').innerHTML = '<div class="hint" style="text-align:center">加载失败</div>';
+  });
+}
+loadPushLogs();
+
+function delLog(id) {
+  if (!confirm('删除这条推送记录？')) return;
+  fetch('/api/push-log?id='+id, {method:'DELETE'}).then(r=>r.json()).then(d => {
+    if (d.ok) loadPushLogs();
+    else showMsg('pushLogsMsg', '❌ 删除失败', 'err');
+  });
+}
+
+function clearAll() {
+  if (!confirm('确定清空全部推送记录？此操作不可撤销。')) return;
+  fetch('/api/push-logs', {method:'DELETE'}).then(r=>r.json()).then(d => {
+    if (d.ok) { loadPushLogs(); showMsg('pushLogsMsg', '✅ 已清空', 'ok'); }
+    else showMsg('pushLogsMsg', '❌ 清空失败', 'err');
+  });
+}
+
+// ── Stickers ──
+const file=document.getElementById('file'),preview=document.getElementById('preview'),
+previewImg=document.getElementById('previewImg');
 file.onchange=()=>{
   const f=file.files[0];if(!f)return;
   const r=new FileReader();
@@ -654,32 +828,27 @@ file.onchange=()=>{
   r.readAsDataURL(f);
 };
 
-form.onsubmit=async e=>{
+document.getElementById('stickerForm').onsubmit=async e=>{
   e.preventDefault();
-  msg.className='msg';msg.textContent='';msg.style.display='none';
-  const f=file.files[0];if(!f){showMsg('请选择图片','err');return}
-  const name=nameInput.value.trim();if(!name){showMsg('请输入名称','err');return}
-  const kw=keywordsInput.value.trim();if(!kw){showMsg('请输入关键词','err');return}
-
-  submitBtn.disabled=true;submitBtn.textContent='上传中...';
-
-  // Resize on client
+  const f=file.files[0],name=document.getElementById('name').value.trim(),
+  kw=document.getElementById('keywords').value.trim();
+  if(!f||!name||!kw){showMsg('stickerMsg','请填写完整','err');return}
+  const btn=document.getElementById('stickerBtn');
+  btn.disabled=true;btn.textContent='上传中...';
   const resized=await resizeImage(f,200);
-  if(!resized){showMsg('图片处理失败','err');submitBtn.disabled=false;submitBtn.textContent='提交';return}
-
+  if(!resized){showMsg('stickerMsg','图片处理失败','err');btn.disabled=false;btn.textContent='提交';return}
   const fd=new FormData();
   fd.append('file',resized,f.name);
   fd.append('name',name);
-  fd.append('desc',descInput.value.trim());
+  fd.append('desc',document.getElementById('desc').value.trim());
   fd.append('keywords',kw);
-
   try{
-    const res=await fetch('/api/upload-sticker',{method:'POST',body:fd});
-    const data=await res.json();
-    if(res.ok){showMsg('✅ 已提交！等待 Cloudflare Pages 构建部署（约1分钟）','ok');form.reset();preview.style.display='none'}
-    else showMsg('❌ '+data.error,'err');
-  }catch(e){showMsg('❌ 网络错误: '+e.message,'err')}
-  finally{submitBtn.disabled=false;submitBtn.textContent='提交'}
+    const r=await fetch('/api/upload-sticker',{method:'POST',body:fd});
+    const d=await r.json();
+    if(r.ok){showMsg('stickerMsg','✅ 已提交！等待部署（约1分钟）','ok');document.getElementById('stickerForm').reset();preview.style.display='none'}
+    else showMsg('stickerMsg','❌ '+d.error,'err');
+  }catch(e){showMsg('stickerMsg','❌ 网络错误','err')}
+  finally{btn.disabled=false;btn.textContent='提交'}
 };
 
 function resizeImage(file,maxW){
@@ -690,8 +859,7 @@ function resizeImage(file,maxW){
       if(w>maxW){h=h*maxW/w;w=maxW}
       const c=document.createElement('canvas');
       c.width=w;c.height=h;
-      const ctx=c.getContext('2d');
-      ctx.drawImage(img,0,0,w,h);
+      c.getContext('2d').drawImage(img,0,0,w,h);
       c.toBlob(b=>res(b),file.type,0.85);
     };
     img.onerror=()=>res(null);
@@ -699,7 +867,12 @@ function resizeImage(file,maxW){
   });
 }
 
-function showMsg(t,type){msg.textContent=t;msg.className='msg '+type;msg.style.display='block'}
+function showMsg(id,t,type){
+  const el=document.getElementById(id);
+  el.textContent=t;el.className='msg '+type;el.style.display='block';
+  setTimeout(()=>el.style.display='none',3000);
+}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 </script>
 </body>
 </html>`;
@@ -877,6 +1050,21 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     return new Response(adminPage(), {
       headers: { 'Content-Type': 'text/html;charset=utf-8' },
     });
+  }
+
+  // Settings API
+  if (url.pathname === '/api/settings') {
+    if (request.method === 'GET') return await handleGetSettings(env);
+    if (request.method === 'POST') return await handleSaveSettings(request, env);
+  }
+
+  // Push logs API
+  if (url.pathname === '/api/push-logs') {
+    if (request.method === 'GET') return await handleListPushLogs(env);
+    if (request.method === 'DELETE') return await handleClearPushLogs(env);
+  }
+  if (url.pathname === '/api/push-log' && request.method === 'DELETE') {
+    return await handleDeletePushLog(request, env);
   }
 
   // Upload sticker
