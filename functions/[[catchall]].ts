@@ -1051,7 +1051,7 @@ async function handleListStickers(env: Env): Promise<Response> {
   const res = await fetch(`https://api.github.com/repos/${repo}/contents/public/stickers/stickers.json`, {
     headers: { Authorization: `Bearer ${ghToken}` },
   });
-  if (!res.ok) return Response.json({ error: '读取 stickers.json 失败' }, { status: 500 });
+  if (!res.ok) return Response.json({ error: '读取 stickers.json 失败: ' + (await res.text()) }, { status: 500 });
   const data = await res.json() as { content: string; sha: string };
   const manifest = JSON.parse(atob(data.content));
   return Response.json(manifest.stickers || []);
