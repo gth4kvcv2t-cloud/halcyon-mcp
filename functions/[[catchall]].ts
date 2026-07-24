@@ -259,7 +259,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'search_stickers',
-    description: '搜索表情包。传入任何与情绪、角色、动作相关的关键词即可。返回的图片列表中选最合适的贴到回复里。如果觉得某张合适，在回复中写 ▶1/▶2/▶3 会自动贴出图片。不合适的不要写。',
+    description: '搜索表情包。传入任何与情绪、角色、动作相关的关键词即可。返回的图片列表中选最合适的贴到回复里。如果觉得某张合适，在回复中写 ▶1/▶2/▶3 会自动贴出图片。都不合适写 ▶0。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -310,7 +310,7 @@ const tools: ToolDef[] = [
 
         const top = scored.slice(0, 3);
         const lines = top.map((s, i) =>
-          `${i + 1}. ${s.name} — ${s.desc || s.name}（要贴的话写 ▶${i + 1}）`
+          `${i + 1}. ${s.name} — ${s.desc || s.name}（合适写 ▶${i + 1}，都不合适写 ▶0）`
         );
 
         const results: { name: string; url: string }[] = [];
@@ -542,13 +542,17 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
       const results = JSON.parse(stickerResultsJson) as { name: string; url: string }[];
       const match = content.match(/▶(\d+)/);
       if (match) {
-        const idx = parseInt(match[1]) - 1;
-        const sticker = results[idx];
-        if (sticker) {
-          (choice.message as Record<string, unknown>).content = content.replace(/▶\d+/, `![${sticker.name}](${sticker.url})`);
+        const idx = parseInt(match[1]);
+        if (idx === 0) {
+          (choice.message as Record<string, unknown>).content = content.replace(/▶0/, '');
+        } else {
+          const sticker = results[idx - 1];
+          if (sticker) {
+            (choice.message as Record<string, unknown>).content = content.replace(/▶\d+/, `![${sticker.name}](${sticker.url})`);
+          }
         }
       } else {
-        (choice.message as Record<string, unknown>).content = content + '\n\n（搜了表情包要贴吗？回 ▶1/▶2/▶3 贴对应的）';
+        (choice.message as Record<string, unknown>).content = content + '\n\n（搜了表情包要贴吗？回 ▶0 不用，▶1/▶2/▶3 贴对应的）';
       }
     }
     return Response.json(data, { status: res.status });
