@@ -832,10 +832,10 @@ function loadStickers() {
     el.innerHTML = list.map((s,i) =>
       '<div class="row">' +
       '<span style="flex-shrink:0;margin-right:8px;width:28px;height:28px;border-radius:4px;overflow:hidden;background:#eee">' +
-      '<img src="'+(s.url||'')+'" style="width:28px;height:28px;object-fit:cover" onerror="this.style.display=\'none\'">' +
+      '<img src="'+(s.url||'')+'" style="width:28px;height:28px;object-fit:cover" onerror="this.style.display=\\'none\\'">' +
       '</span>' +
       '<span class="text">'+esc(s.name||s.file)+'</span>' +
-      '<button class="btn-sm btn-danger" onclick="delSticker(\''+esc(s.file)+'\')">删</button>' +
+      '<button class="btn-sm btn-danger" onclick="delSticker(\\''+esc(s.file)+'\\')">删</button>' +
       '</div>'
     ).join('');
   }).catch(() => {
