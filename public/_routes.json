@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/mcp", "/wake-up", "/v1/chat/completions", "/v1/user/balance", "/v1/models", "/admin", "/api/settings", "/api/push-logs", "/api/push-log", "/api/upload-sticker"],
+  "include": ["/mcp", "/wake-up", "/v1/chat/completions", "/v1/user/balance", "/v1/models", "/admin", "/api/settings", "/api/push-logs", "/api/push-log", "/api/stickers", "/api/sticker", "/api/upload-sticker"],
   "exclude": []
 }

@@ -730,6 +730,12 @@ textarea{height:60px;resize:vertical}
 </div>
 
 <div class="card">
+<h2>📋 表情包</h2>
+<div id="stickerListMsg" class="msg"></div>
+<div id="stickerList"><div class="loading">加载中...</div></div>
+</div>
+
+<div class="card">
 <h2>📎 添加表情包</h2>
 <div id="stickerMsg" class="msg"></div>
 <form id="stickerForm">
@@ -819,6 +825,34 @@ function clearAll() {
 }
 
 // ── Stickers ──
+function loadStickers() {
+  fetch('/api/stickers').then(r=>r.json()).then(list => {
+    const el = document.getElementById('stickerList');
+    if (!list.length) { el.innerHTML = '<div class="hint" style="text-align:center">暂无表情包</div>'; return; }
+    el.innerHTML = list.map((s,i) =>
+      '<div class="row">' +
+      '<span style="flex-shrink:0;margin-right:8px;width:28px;height:28px;border-radius:4px;overflow:hidden;background:#eee">' +
+      '<img src="'+(s.url||'')+'" style="width:28px;height:28px;object-fit:cover" onerror="this.style.display=\'none\'">' +
+      '</span>' +
+      '<span class="text">'+esc(s.name||s.file)+'</span>' +
+      '<button class="btn-sm btn-danger" onclick="delSticker(\''+esc(s.file)+'\')">删</button>' +
+      '</div>'
+    ).join('');
+  }).catch(() => {
+    document.getElementById('stickerList').innerHTML = '<div class="hint" style="text-align:center">加载失败</div>';
+  });
+}
+loadStickers();
+
+function delSticker(file) {
+  if (!confirm('删除这张表情包？注意：删除后需要等 Cloudflare Pages 重新部署才能生效。')) return;
+  fetch('/api/sticker?file='+encodeURIComponent(file), {method:'DELETE'}).then(r=>r.json()).then(d => {
+    if (d.ok) { loadStickers(); showMsg('stickerListMsg', '✅ 已删除，等待部署', 'ok'); }
+    else showMsg('stickerListMsg', '❌ '+d.error, 'err');
+  });
+}
+
+// ── Stickers Upload ──
 const file=document.getElementById('file'),preview=document.getElementById('preview'),
 previewImg=document.getElementById('previewImg');
 file.onchange=()=>{
@@ -1008,6 +1042,114 @@ async function handleAdminUpload(request: Request, env: Env): Promise<Response> 
   }
 }
 
+// ─── Sticker List / Delete ────────────────────────────────────────────────────
+
+async function handleListStickers(env: Env): Promise<Response> {
+  const ghToken = env.GITHUB_TOKEN;
+  if (!ghToken) return Response.json({ error: 'GITHUB_TOKEN not configured' }, { status: 500 });
+  const repo = env.GITHUB_REPO || 'gth4kvcv2t-cloud/halcyon-mcp';
+  const res = await fetch(`https://api.github.com/repos/${repo}/contents/public/stickers/stickers.json`, {
+    headers: { Authorization: `Bearer ${ghToken}` },
+  });
+  if (!res.ok) return Response.json({ error: '读取 stickers.json 失败' }, { status: 500 });
+  const data = await res.json() as { content: string; sha: string };
+  const manifest = JSON.parse(atob(data.content));
+  return Response.json(manifest.stickers || []);
+}
+
+async function handleDeleteSticker(request: Request, env: Env): Promise<Response> {
+  if (!env.GITHUB_TOKEN) {
+    return Response.json({ error: 'GITHUB_TOKEN 未配置，请在 Cloudflare Dashboard 添加环境变量' }, { status: 500 });
+  }
+
+  const repo = env.GITHUB_REPO || 'gth4kvcv2t-cloud/halcyon-mcp';
+  const gh = (path: string, opts?: RequestInit) =>
+    fetch(`https://api.github.com/repos/${repo}/${path}`, {
+      ...opts,
+      headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, ...(opts?.headers || {}) },
+    });
+
+  try {
+    const fileParam = new URL(request.url).searchParams.get('file');
+    if (!fileParam) return Response.json({ error: '缺少 file 参数' }, { status: 400 });
+    const filename = decodeURIComponent(fileParam);
+
+    // Read stickers.json from GitHub
+    const stickersRes = await gh(`contents/public/stickers/stickers.json`);
+    if (!stickersRes.ok) {
+      return Response.json({ error: '读取 stickers.json 失败: ' + (await stickersRes.text()) }, { status: 500 });
+    }
+    const stickersData = await stickersRes.json() as { content: string; sha: string };
+    const manifest: { stickers: any[] } = JSON.parse(atob(stickersData.content));
+    const oldLen = manifest.stickers.length;
+    manifest.stickers = manifest.stickers.filter((s: any) => s.file !== filename);
+    if (manifest.stickers.length === oldLen) {
+      return Response.json({ error: `未找到表情包: ${filename}` }, { status: 404 });
+    }
+
+    // Create blob for updated stickers.json
+    const stickersJsonStr = JSON.stringify(manifest, null, 2);
+    const stickersB64 = btoa(stickersJsonStr);
+    const stBlob = await gh('git/blobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: stickersB64, encoding: 'base64' }),
+    });
+    if (!stBlob.ok) return Response.json({ error: '创建 stickers.json blob 失败' }, { status: 500 });
+    const stBlobData = await stBlob.json() as { sha: string };
+
+    // Get latest commit and tree
+    const refRes = await gh('git/refs/heads/main');
+    if (!refRes.ok) return Response.json({ error: '读取分支失败' }, { status: 500 });
+    const refData = await refRes.json() as { object: { sha: string } };
+    const latestSha = refData.object.sha;
+
+    const commitRes = await gh(`git/commits/${latestSha}`);
+    const commitData = await commitRes.json() as { tree: { sha: string } };
+    const baseTreeSha = commitData.tree.sha;
+
+    // Create tree: include updated stickers.json, EXCLUDE the image file to delete it
+    const treeRes = await gh('git/trees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: [
+          { path: 'public/stickers/stickers.json', mode: '100644', type: 'blob', sha: stBlobData.sha },
+        ],
+      }),
+    });
+    if (!treeRes.ok) return Response.json({ error: '创建 tree 失败' }, { status: 500 });
+    const treeData = await treeRes.json() as { sha: string };
+
+    // Create commit
+    const name = manifest.stickers.find(s => s.file === filename)?.name || filename;
+    const newCommit = await gh('git/commits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `delete sticker: ${name}`,
+        tree: treeData.sha,
+        parents: [latestSha],
+      }),
+    });
+    if (!newCommit.ok) return Response.json({ error: '创建 commit 失败' }, { status: 500 });
+    const newCommitData = await newCommit.json() as { sha: string };
+
+    // Update branch
+    const updateRes = await gh('git/refs/heads/main', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sha: newCommitData.sha, force: false }),
+    });
+    if (!updateRes.ok) return Response.json({ error: '更新分支失败' }, { status: 500 });
+
+    return Response.json({ ok: true, name });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
+}
+
 // ─── Pages Function Entry ─────────────────────────────────────────────────────
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -1070,6 +1212,14 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   // Upload sticker
   if (url.pathname === '/api/upload-sticker' && request.method === 'POST') {
     return await handleAdminUpload(request, env);
+  }
+
+  // Sticker list / delete
+  if (url.pathname === '/api/stickers' && request.method === 'GET') {
+    return await handleListStickers(env);
+  }
+  if (url.pathname === '/api/sticker' && request.method === 'DELETE') {
+    return await handleDeleteSticker(request, env);
   }
 
   // Wake-up endpoint (for cron-job.org)
