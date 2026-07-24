@@ -508,7 +508,7 @@ async function handleProxy(request: Request, env: Env): Promise<Response> {
     const pushes = await getPushLogs(env.DB, 3);
     if (pushes.length) {
       pushes.reverse();
-      const ctxParts = ['📬 最近推送:'];
+      const ctxParts = [`📬 最近推送（当前 ${nowISO().slice(5, 16)}）:`];
       for (const p of pushes) ctxParts.push(`- ${p.created_at.slice(5, 16)} ${p.content}`);
       const idx = messages.findIndex(m => m.role === 'user');
       messages.splice(idx >= 0 ? idx : messages.length, 0, { role: 'user', content: ctxParts.join('\n') });
